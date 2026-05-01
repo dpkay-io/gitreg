@@ -5,74 +5,40 @@ on:
     branches: [main]
 
 jobs:
-  bump:
-    name: Bump version
+  tag:
+    name: Tag release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      new_tag: ${{ steps.compute.outputs.new_tag }}
-      sha: ${{ steps.push.outputs.sha }}
+      new_tag: ${{ steps.tag.outputs.new_tag }}
+      skip: ${{ steps.tag.outputs.skip }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd        # v6.0.2
         with:
           fetch-depth: 0
 
-      - name: Compute next version
-        id: compute
+      - name: Create and push tag
+        id: tag
         run: |
-          CARGO_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
-
-          if [ -z "$LATEST" ]; then
-            NEW_VERSION="$CARGO_VERSION"
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          TAG="v${VERSION}"
+          echo "new_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if git tag -l | grep -qx "$TAG"; then
+            echo "Tag $TAG already exists, skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            LATEST_VER="${LATEST#v}"
-            IFS='.' read -r MAJ MIN PAT <<< "$LATEST_VER"
-            IFS='.' read -r C_MAJ C_MIN C_PAT <<< "$CARGO_VERSION"
-            if [ "$C_MAJ" -gt "$MAJ" ] \
-               || { [ "$C_MAJ" -eq "$MAJ" ] && [ "$C_MIN" -gt "$MIN" ]; } \
-               || { [ "$C_MAJ" -eq "$MAJ" ] && [ "$C_MIN" -eq "$MIN" ] && [ "$C_PAT" -gt "$PAT" ]; }; then
-              NEW_VERSION="$CARGO_VERSION"
-            else
-              NEW_VERSION="${MAJ}.${MIN}.$((PAT + 1))"
-            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-
-          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "new_tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Update Cargo.toml
-        run: |
-          NEW_VERSION="${{ steps.compute.outputs.new_version }}"
-          sed -i "s/^version = \"[^\"]*\"/version = \"${NEW_VERSION}\"/" Cargo.toml
-
-      - name: Update Cargo.lock
-        run: |
-          awk -v v="${{ steps.compute.outputs.new_version }}" '
-            /^name = "gitreg"$/ { found=1 }
-            found && /^version = / { sub(/"[^"]*"/, "\"" v "\""); found=0 }
-            { print }
-          ' Cargo.lock > Cargo.lock.tmp && mv Cargo.lock.tmp Cargo.lock
-
-      - name: Commit and tag
-        id: push
-        run: |
-          NEW_TAG="${{ steps.compute.outputs.new_tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: bump version to ${NEW_TAG}"
-            git push origin HEAD:main
-          fi
-          git tag "${NEW_TAG}"
-          git push origin "${NEW_TAG}"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.target }}
-    needs: bump
+    needs: tag
+    if: needs.tag.outputs.skip != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -96,8 +62,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd        # v6.0.2
-        with:
-          ref: ${{ needs.bump.outputs.sha }}
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8   # stable 2026-05-01
         with:
@@ -156,7 +120,8 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [bump, build]
+    needs: [tag, build]
+    if: needs.tag.outputs.skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -170,8 +135,8 @@ jobs:
       - name: Publish release
         uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
         with:
-          tag: ${{ needs.bump.outputs.new_tag }}
-          name: ${{ needs.bump.outputs.new_tag }}
+          tag: ${{ needs.tag.outputs.new_tag }}
+          name: ${{ needs.tag.outputs.new_tag }}
           prerelease: false
           makeLatest: true
           allowUpdates: true

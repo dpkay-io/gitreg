@@ -1,5 +1,13 @@
 # gitreg
 
+## First-time setup (one-time per clone)
+
+```sh
+git config core.hooksPath .githooks
+```
+
+This activates the pre-commit checks and the pre-push version-bump hook stored in [.githooks/](.githooks/).
+
 ## Local validation (run before every commit)
 
 ```sh
