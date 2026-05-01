@@ -1,9 +1,8 @@
-name: Release
+name: Build Latest
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
 
 jobs:
   build:
@@ -72,9 +71,34 @@ jobs:
           "$hash  gitreg-latest-${{ matrix.target }}.zip" `
             | Out-File -Encoding utf8 "gitreg-latest-${{ matrix.target }}.zip.sha256"
 
-      - name: Upload
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: gitreg-${{ matrix.target }}
+          path: |
             gitreg-latest-${{ matrix.target }}.${{ matrix.archive }}
             gitreg-latest-${{ matrix.target }}.${{ matrix.archive }}.sha256
+
+  publish:
+    name: Publish latest release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/
+
+      - uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
+        with:
+          tag: latest
+          name: "Latest build (main)"
+          body: "Automatically built from the main branch. Commit: ${{ github.sha }}"
+          prerelease: true
+          makeLatest: false
+          allowUpdates: true
+          removeArtifacts: true
+          artifacts: "dist/**"

@@ -4,6 +4,7 @@ mod error;
 mod hook;
 #[cfg(not(windows))]
 mod shell;
+mod upgrade;
 
 use chrono::{TimeZone, Utc};
 use clap::Parser;
@@ -200,6 +201,13 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
 }
 
 fn main() {
+    #[cfg(windows)]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = std::fs::remove_file(exe.with_extension("exe.old"));
+        }
+    }
+
     let cli = Cli::parse();
 
     match &cli.command {
@@ -236,6 +244,12 @@ fn main() {
                 None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             };
             if let Err(e) = cmd_scan(&dir, *depth) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Upgrade => {
+            if let Err(e) = upgrade::run() {
                 eprintln!("Error: {e}");
                 process::exit(1);
             }

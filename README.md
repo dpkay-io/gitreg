@@ -27,6 +27,14 @@ The user's `git` command is **never blocked** — the hook runs in the backgroun
 
 ## Installation
 
+### Quick install (Linux, macOS, Git Bash, WSL)
+
+```sh
+curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
+```
+
+Then follow the `source` instruction printed at the end.
+
 ### From source (all platforms)
 
 Requires [Rust](https://rustup.rs/).
@@ -93,6 +101,37 @@ source ~/.bashrc
 | `gitreg scan [dir] [-d <depth>]` | Scan a directory tree and register all found git repos (default depth: 3) |
 | `gitreg prune` | Remove entries for repos that no longer exist on disk |
 | `gitreg rm <path>` | Remove a specific repo from the registry |
+| `gitreg upgrade` | Check for a newer release on GitHub and replace the binary in place |
+
+---
+
+## Upgrading
+
+```sh
+gitreg upgrade
+```
+
+Checks the [GitHub Releases](../../releases) page for a newer version, downloads the correct pre-built binary for your platform, and replaces the running binary in place — no external tools needed.
+
+```
+Current version: v0.1.0
+Checking for updates... v0.2.0
+Upgrading to v0.2.0 ...
+Downloading https://github.com/.../gitreg-latest-x86_64-apple-darwin.tar.gz ...
+Upgraded to v0.2.0.
+```
+
+If you are already on the latest version:
+
+```
+Current version: v0.2.0
+Checking for updates... v0.2.0
+Already up to date (v0.2.0).
+```
+
+On Windows the old binary is briefly renamed to `gitreg.exe.old` during the swap and is automatically deleted on the next invocation.
+
+> **Note:** `gitreg upgrade` requires a network connection and a pre-built binary for your platform. It is not available for source builds on unsupported targets — use `cargo install --path .` to rebuild from source instead.
 
 ---
 

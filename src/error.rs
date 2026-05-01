@@ -22,6 +22,15 @@ pub enum GitregError {
     #[cfg(windows)]
     #[error("`gitreg init` is not supported on Windows; use WSL or Git Bash")]
     UnsupportedPlatform,
+
+    #[error("network error: {0}")]
+    Network(String),
+
+    #[error("upgrade failed: {0}")]
+    Upgrade(String),
+
+    #[error("could not resolve executable path: {0}")]
+    ExePath(std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, GitregError>;

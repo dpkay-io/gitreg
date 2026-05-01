@@ -41,4 +41,7 @@ pub enum Commands {
         #[arg(long, short, default_value = "3")]
         depth: usize,
     },
+
+    /// Check for a newer release and upgrade the binary in place
+    Upgrade,
 }
