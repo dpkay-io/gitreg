@@ -1,25 +1,34 @@
 use crate::error::{GitregError, Result};
 use std::io::Read;
 
-#[cfg(all(target_os = "linux",   target_arch = "x86_64"))]  const TARGET: &str = "x86_64-unknown-linux-musl";
-#[cfg(all(target_os = "linux",   target_arch = "aarch64"))] const TARGET: &str = "aarch64-unknown-linux-musl";
-#[cfg(all(target_os = "macos",   target_arch = "x86_64"))]  const TARGET: &str = "x86_64-apple-darwin";
-#[cfg(all(target_os = "macos",   target_arch = "aarch64"))] const TARGET: &str = "aarch64-apple-darwin";
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]  const TARGET: &str = "x86_64-pc-windows-msvc";
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const TARGET: &str = "x86_64-unknown-linux-musl";
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const TARGET: &str = "aarch64-unknown-linux-musl";
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+const TARGET: &str = "x86_64-apple-darwin";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const TARGET: &str = "aarch64-apple-darwin";
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+const TARGET: &str = "x86_64-pc-windows-msvc";
 #[cfg(not(any(
-    all(target_os = "linux",   target_arch = "x86_64"),
-    all(target_os = "linux",   target_arch = "aarch64"),
-    all(target_os = "macos",   target_arch = "x86_64"),
-    all(target_os = "macos",   target_arch = "aarch64"),
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "aarch64"),
+    all(target_os = "macos", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64"),
     all(target_os = "windows", target_arch = "x86_64"),
 )))]
 const TARGET: &str = "";
 
-#[cfg(windows)]      const EXT: &str = "zip";
-#[cfg(not(windows))] const EXT: &str = "tar.gz";
+#[cfg(windows)]
+const EXT: &str = "zip";
+#[cfg(not(windows))]
+const EXT: &str = "tar.gz";
 
-#[cfg(windows)]      const BINARY_NAME: &str = "gitreg.exe";
-#[cfg(not(windows))] const BINARY_NAME: &str = "gitreg";
+#[cfg(windows)]
+const BINARY_NAME: &str = "gitreg.exe";
+#[cfg(not(windows))]
+const BINARY_NAME: &str = "gitreg";
 
 const API_URL: &str = "https://api.github.com/repos/dpkay-io/gitreg/releases/latest";
 const DOWNLOAD_BASE: &str = "https://github.com/dpkay-io/gitreg/releases/latest/download";
@@ -56,15 +65,19 @@ fn fetch_latest_tag() -> Result<String> {
     let body = response
         .into_string()
         .map_err(|e| GitregError::Network(e.to_string()))?;
-    extract_tag_name(&body)
-        .ok_or_else(|| GitregError::Upgrade("could not parse tag_name from GitHub API response".into()))
+    extract_tag_name(&body).ok_or_else(|| {
+        GitregError::Upgrade("could not parse tag_name from GitHub API response".into())
+    })
 }
 
 fn download_archive(target: &str, ext: &str) -> Result<Vec<u8>> {
     let url = format!("{DOWNLOAD_BASE}/gitreg-latest-{target}.{ext}");
     println!("Downloading {url} ...");
     let response = ureq::get(&url)
-        .set("User-Agent", &format!("gitreg/{}", env!("CARGO_PKG_VERSION")))
+        .set(
+            "User-Agent",
+            &format!("gitreg/{}", env!("CARGO_PKG_VERSION")),
+        )
         .call()
         .map_err(|e| GitregError::Network(e.to_string()))?;
     let mut bytes = Vec::new();
@@ -82,12 +95,19 @@ fn extract_binary(archive_bytes: &[u8]) -> Result<Vec<u8>> {
 
     let gz = GzDecoder::new(archive_bytes);
     let mut archive = Archive::new(gz);
-    for entry in archive.entries().map_err(|e| GitregError::Upgrade(e.to_string()))? {
+    for entry in archive
+        .entries()
+        .map_err(|e| GitregError::Upgrade(e.to_string()))?
+    {
         let mut entry = entry.map_err(|e| GitregError::Upgrade(e.to_string()))?;
-        let path = entry.path().map_err(|e| GitregError::Upgrade(e.to_string()))?;
+        let path = entry
+            .path()
+            .map_err(|e| GitregError::Upgrade(e.to_string()))?;
         if path.file_name().map(|n| n == BINARY_NAME).unwrap_or(false) {
             let mut buf = Vec::new();
-            entry.read_to_end(&mut buf).map_err(|e| GitregError::Upgrade(e.to_string()))?;
+            entry
+                .read_to_end(&mut buf)
+                .map_err(|e| GitregError::Upgrade(e.to_string()))?;
             return Ok(buf);
         }
     }
@@ -102,8 +122,7 @@ fn extract_binary(archive_bytes: &[u8]) -> Result<Vec<u8>> {
     use zip::ZipArchive;
 
     let cursor = Cursor::new(archive_bytes);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| GitregError::Upgrade(e.to_string()))?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| GitregError::Upgrade(e.to_string()))?;
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
@@ -165,9 +184,8 @@ pub fn run() -> Result<()> {
 
     let current = parse_version(current_version)
         .ok_or_else(|| GitregError::Upgrade("could not parse current version".into()))?;
-    let latest = parse_version(&latest_tag).ok_or_else(|| {
-        GitregError::Upgrade(format!("could not parse latest tag: {latest_tag}"))
-    })?;
+    let latest = parse_version(&latest_tag)
+        .ok_or_else(|| GitregError::Upgrade(format!("could not parse latest tag: {latest_tag}")))?;
 
     if current >= latest {
         println!("Already up to date (v{current_version}).");
