@@ -2,38 +2,29 @@
 
 Zero-latency background Git repository tracker.
 
-```
-shell invokes git
-      │
-      ▼
-  bash/zsh/fish shim
-      │  (find .git root, check marker)
-      │
-      ├─── marker fresh? ──► command git  (zero latency)
-      │
-      └─── marker missing/stale?
-               │
-               ├─► gitreg hook --path <root>   (background, disowned)
-               │         │
-               │         ├─► upsert into SQLite
-               │         └─► write .git/gitreg_tracked  (atomic rename)
-               │
-               └─► command git  (zero latency)
-```
-
 The user's `git` command is **never blocked** — the hook runs in the background.
 
 ---
 
 ## Installation
 
-### Quick install (Linux, macOS, Git Bash, WSL)
+### Quick install
+
+#### Linux, macOS, Git Bash, WSL
 
 ```sh
 curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
 ```
 
 Then follow the `source` instruction printed at the end.
+
+#### Windows (native PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
+```
+
+Open a new terminal after installation so the updated PATH takes effect.
 
 ### From source (all platforms)
 
@@ -70,7 +61,17 @@ gitreg init
 
 ### Windows
 
-Native Windows shell integration is **not supported**. Use one of the following:
+**Native PowerShell** (recommended):
+```powershell
+irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
+```
+
+> **Note:** The `gitreg init` shell shim (auto-tracking on every `git` command) requires a POSIX shell.
+> Use **Git Bash** or **WSL** to enable it. All other commands — `gitreg scan`, `gitreg ls`,
+> `gitreg prune`, `gitreg rm`, `gitreg upgrade` — work fully in native PowerShell.
+
+**Git Bash** and **WSL** users can also use the [Quick install](#quick-install) bash command above,
+or install manually:
 
 **Git Bash:**
 ```sh
@@ -143,7 +144,7 @@ On Windows the old binary is briefly renamed to `gitreg.exe.old` during the swap
 | Zsh | `~/.zshrc` |
 | Fish | `~/.config/fish/functions/git.fish` |
 
-Windows users can use **Git Bash** or **WSL** where `$SHELL` resolves to bash.
+Windows users can use **Git Bash** or **WSL** for shell-shim auto-tracking. The `gitreg` binary installs and runs natively in PowerShell; only `gitreg init` requires a POSIX shell.
 
 ---
 
