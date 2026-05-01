@@ -11,6 +11,14 @@ cargo build --locked
 
 All four steps mirror the CI pipeline (`ci.yml`). A clean local run means CI passes.
 
+## GitHub Actions workflow validation (run before committing any .github/workflows/*.yml change)
+
+```sh
+actionlint .github/workflows/*.yml
+```
+
+`actionlint` is installed at `~/.cargo/bin/actionlint`. A workflow file that passes `actionlint` will not fail with a parse error on GitHub. Never push a workflow change without running this first.
+
 ## Rust formatting rules
 
 - `#[cfg(...)]` attributes go on their own line — never inline with the item they gate:

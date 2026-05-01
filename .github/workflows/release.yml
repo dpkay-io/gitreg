@@ -101,13 +101,27 @@ jobs:
           merge-multiple: true
           path: dist/
 
-      - uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
+      - name: Publish pre-release (main branch)
+        if: github.ref_type != 'tag'
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
         with:
-          tag: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
-          name: ${{ github.ref_type == 'tag' && github.ref_name || 'Latest build (main)' }}
-          body: ${{ github.ref_type == 'tag' && '' || format('Automatically built from the main branch. Commit: {0}', github.sha) }}
-          prerelease: ${{ github.ref_type != 'tag' }}
-          makeLatest: ${{ github.ref_type == 'tag' }}
+          tag: latest
+          name: "Latest build (main)"
+          body: "Automatically built from the main branch."
+          prerelease: true
+          makeLatest: false
+          allowUpdates: true
+          removeArtifacts: true
+          artifacts: "dist/**"
+
+      - name: Publish release (version tag)
+        if: github.ref_type == 'tag'
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
+        with:
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: false
+          makeLatest: true
           allowUpdates: true
           removeArtifacts: true
           artifacts: "dist/**"
