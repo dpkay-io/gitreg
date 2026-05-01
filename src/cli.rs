@@ -33,7 +33,10 @@ pub enum Commands {
     Prune,
 
     /// Remove a specific repository from the registry
-    Rm { path: PathBuf },
+    Rm {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+    },
 
     /// Scan a directory tree and register all found git repositories
     Scan {
@@ -47,4 +50,18 @@ pub enum Commands {
 
     /// Check for a newer release and upgrade the binary in place
     Upgrade,
+
+    /// Add a tag to a repository
+    Tag {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+        tag: String,
+    },
+
+    /// Remove a tag from a repository
+    Untag {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+        tag: String,
+    },
 }

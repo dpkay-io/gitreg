@@ -52,9 +52,12 @@ ok "ls correct after prune"
 # Remove repo_a via rm command
 "$GITREG" rm "$REPO_A"
 
-# Marker should be deleted
-[[ ! -f "$REPO_A/.git/gitreg_tracked" ]] || fail "marker still exists after rm"
-ok "marker deleted by rm"
+# Marker must NOT be deleted — its presence prevents the shell shim from
+# ever calling the hook again (shim checks: if marker content == git_root,
+# needs_reg=false).  Without the marker, the next `git status` would
+# re-register the repo and undo the rm.
+[[ -f "$REPO_A/.git/gitreg_tracked" ]] || fail "marker missing after rm (would allow re-registration)"
+ok "marker preserved by rm (prevents re-registration via shell shim)"
 
 # ls should be empty (or show no repos)
 LS_OUT3=$("$GITREG" ls)

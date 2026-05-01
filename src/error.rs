@@ -31,6 +31,9 @@ pub enum GitregError {
 
     #[error("could not resolve executable path: {0}")]
     ExePath(std::io::Error),
+
+    #[error("no repository found matching '{0}'")]
+    NotFound(String),
 }
 
 pub type Result<T> = std::result::Result<T, GitregError>;

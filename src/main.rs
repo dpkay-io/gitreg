@@ -6,7 +6,7 @@ mod hook;
 mod shell;
 mod upgrade;
 
-use chrono::{TimeZone, Utc};
+use chrono::{Local, TimeZone, Utc};
 use clap::Parser;
 use cli::{Cli, Commands};
 use db::{Database, RepoRecord};
@@ -49,27 +49,37 @@ fn log_hook_error(err: &GitregError) {
 
 #[derive(Tabled)]
 struct LsRow {
+    #[tabled(rename = "#")]
+    row_num: usize,
+    #[tabled(rename = "Name")]
+    name: String,
     #[tabled(rename = "ID")]
     id: i64,
     #[tabled(rename = "Path")]
     path: String,
-    #[tabled(rename = "Last Seen")]
+    #[tabled(rename = "Tags")]
+    tags: String,
+    #[tabled(rename = "Last Git Cmd")]
     last_seen: String,
 }
 
-impl From<RepoRecord> for LsRow {
-    fn from(r: RepoRecord) -> Self {
+impl LsRow {
+    fn new(row_num: usize, r: RepoRecord) -> Self {
         let secs = r.last_seen / 1000;
         let nsecs = ((r.last_seen % 1000) * 1_000_000) as u32;
         let dt = Utc
             .timestamp_opt(secs, nsecs)
             .single()
             .unwrap_or_default()
-            .format("%Y-%m-%d %H:%M:%S UTC")
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M:%S")
             .to_string();
         Self {
+            row_num,
             id: r.id,
+            name: r.name.unwrap_or_default(),
             path: r.path,
+            tags: r.tags.join(", "),
             last_seen: dt,
         }
     }
@@ -108,7 +118,11 @@ fn cmd_ls() -> Result<()> {
         println!("No repositories tracked yet.");
         return Ok(());
     }
-    let rows: Vec<LsRow> = records.into_iter().map(LsRow::from).collect();
+    let rows: Vec<LsRow> = records
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| LsRow::new(i + 1, r))
+        .collect();
     println!("{}", Table::new(rows));
     Ok(())
 }
@@ -131,27 +145,31 @@ fn cmd_prune() -> Result<()> {
     Ok(())
 }
 
-fn cmd_rm(raw_path: &Path) -> Result<()> {
-    let canonical = dunce::canonicalize(raw_path)
-        .map_err(|_| GitregError::PathNotFound(raw_path.to_path_buf()))?;
-    let canonical_str = canonical
-        .to_str()
-        .ok_or_else(|| GitregError::PathNotFound(canonical.clone()))?;
-
+fn cmd_rm(target: &str) -> Result<()> {
     let db = open_db()?;
-    let deleted = db.remove(canonical_str)?;
 
-    let marker = canonical.join(".git").join("gitreg_tracked");
-    if marker.exists() {
-        std::fs::remove_file(&marker)?;
-    }
+    // Resolve by ID, name, or exact path; fall back to canonicalizing as a
+    // filesystem path so relative paths (e.g. `./myrepo`) work too.
+    let id = match db.resolve_target(target)? {
+        Some(id) => id,
+        None => {
+            let canon = dunce::canonicalize(target)
+                .ok()
+                .and_then(|p| p.into_os_string().into_string().ok());
+            let resolved = canon
+                .as_deref()
+                .map(|s| db.resolve_target(s))
+                .transpose()?
+                .flatten();
+            resolved.ok_or_else(|| GitregError::NotFound(target.to_owned()))?
+        }
+    };
 
-    if deleted {
-        println!("Removed: {canonical_str}");
-    } else {
-        eprintln!("Not tracked: {canonical_str}");
-        process::exit(1);
-    }
+    let path = db
+        .remove_by_id(id)?
+        .ok_or_else(|| GitregError::NotFound(target.to_owned()))?;
+
+    println!("Removed: {path}");
     Ok(())
 }
 
@@ -177,7 +195,7 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
                 warnings += 1;
                 continue;
             };
-            match db.upsert(s) {
+            match db.upsert(s, None) {
                 Ok(()) => {
                     println!("  {}", s);
                     found += 1;
@@ -227,6 +245,26 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
     Ok(())
 }
 
+fn cmd_tag(target: &str, tag: &str) -> Result<()> {
+    let db = open_db()?;
+    let id = db
+        .resolve_target(target)?
+        .ok_or_else(|| GitregError::NotFound(target.to_owned()))?;
+    db.add_tag(id, tag)?;
+    println!("added tag '{tag}'");
+    Ok(())
+}
+
+fn cmd_untag(target: &str, tag: &str) -> Result<()> {
+    let db = open_db()?;
+    let id = db
+        .resolve_target(target)?
+        .ok_or_else(|| GitregError::NotFound(target.to_owned()))?;
+    db.remove_tag(id, tag)?;
+    println!("removed tag '{tag}'");
+    Ok(())
+}
+
 fn main() {
     #[cfg(windows)]
     {
@@ -266,8 +304,8 @@ fn main() {
                 process::exit(1);
             }
         }
-        Commands::Rm { path } => {
-            if let Err(e) = cmd_rm(path) {
+        Commands::Rm { target } => {
+            if let Err(e) = cmd_rm(target) {
                 eprintln!("Error: {e}");
                 process::exit(1);
             }
@@ -289,6 +327,18 @@ fn main() {
         }
         Commands::Upgrade => {
             if let Err(e) = upgrade::run() {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Tag { target, tag } => {
+            if let Err(e) = cmd_tag(target, tag) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Untag { target, tag } => {
+            if let Err(e) = cmd_untag(target, tag) {
                 eprintln!("Error: {e}");
                 process::exit(1);
             }

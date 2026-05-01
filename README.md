@@ -98,11 +98,34 @@ source ~/.bashrc
 | Command | Description |
 |---|---|
 | `gitreg init` | Detect shell, inject shim into rc file |
-| `gitreg ls` | List all tracked repositories with ID, path, and last-seen timestamp |
+| `gitreg ls` | List all tracked repositories with ID, name, path, tags, and last-seen timestamp (local timezone) |
+| `gitreg tag <target> <tag>` | Add a tag to a repository; `<target>` is an ID, `owner/repo` name, or path |
+| `gitreg untag <target> <tag>` | Remove a tag from a repository |
 | `gitreg scan [dir] [-d <depth>]` | Scan a directory tree and register all found git repos (default depth: 3) |
 | `gitreg prune` | Remove entries for repos that no longer exist on disk |
-| `gitreg rm <path>` | Remove a specific repo from the registry |
+| `gitreg rm <target>` | Remove a specific repo from the registry; `<target>` is an ID, `owner/repo` name, or path |
 | `gitreg upgrade` | Check for a newer release on GitHub and replace the binary in place |
+
+### Tagging example
+
+```
+$ gitreg ls
+ ID  Name              Path                    Tags        Last Seen
+ 1   octocat/hello     /home/user/hello                    2026-05-01 14:30:00 +0530
+
+$ gitreg tag 1 work
+added tag 'work'
+
+$ gitreg ls
+ ID  Name              Path                    Tags        Last Seen
+ 1   octocat/hello     /home/user/hello        work        2026-05-01 14:30:00 +0530
+
+$ gitreg tag octocat/hello personal
+added tag 'personal'
+
+$ gitreg untag 1 work
+removed tag 'work'
+```
 
 ---
 
