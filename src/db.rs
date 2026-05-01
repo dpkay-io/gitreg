@@ -20,10 +20,11 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS repos (
 );";
 
 fn now_millis() -> i64 {
-    SystemTime::now()
+    let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis() as i64
+        .as_millis();
+    i64::try_from(millis).unwrap_or(i64::MAX)
 }
 
 fn init_conn(conn: &Connection) -> Result<()> {
@@ -78,6 +79,8 @@ impl Database {
     }
 
     pub fn prune(&self) -> Result<Vec<String>> {
+        // exists() check and DELETE are not atomic — concurrent prune calls may
+        // report inconsistent counts, but the final DB state remains consistent.
         let all = self.list()?;
         let mut removed = Vec::new();
         for rec in all {

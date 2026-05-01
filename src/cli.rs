@@ -17,6 +17,9 @@ pub enum Commands {
     Init,
 
     /// Record a repository (called by the shell shim)
+    // Hidden from --help to keep the public interface clean. Callers can
+    // still invoke it directly, but it only modifies the caller's own
+    // registry — no privilege escalation is possible.
     #[command(hide = true)]
     Hook {
         #[arg(long)]

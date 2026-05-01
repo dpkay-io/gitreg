@@ -44,14 +44,42 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "Downloading gitreg for ${TARGET}..."
+DOWNLOADER=""
 if command -v curl >/dev/null 2>&1; then
+  DOWNLOADER="curl"
   curl -sSfL "$URL" -o "$TMP/archive.${EXT}"
 elif command -v wget >/dev/null 2>&1; then
+  DOWNLOADER="wget"
   wget -q "$URL" -O "$TMP/archive.${EXT}"
 else
   echo "Error: curl or wget is required" >&2
   exit 1
 fi
+
+SHA256_URL="${URL}.sha256"
+if [ "$DOWNLOADER" = "curl" ]; then
+  curl -sSfL "$SHA256_URL" -o "$TMP/archive.sha256"
+else
+  wget -q "$SHA256_URL" -O "$TMP/archive.sha256"
+fi
+
+EXPECTED_HASH="$(awk '{print $1}' "$TMP/archive.sha256")"
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL_HASH="$(sha256sum "$TMP/archive.${EXT}" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL_HASH="$(shasum -a 256 "$TMP/archive.${EXT}" | awk '{print $1}')"
+else
+  echo "Error: sha256sum or shasum not found — cannot verify download integrity" >&2
+  exit 1
+fi
+
+if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+  echo "Error: SHA256 mismatch — archive may be corrupted or tampered with" >&2
+  echo "  Expected: $EXPECTED_HASH" >&2
+  echo "  Actual:   $ACTUAL_HASH" >&2
+  exit 1
+fi
+echo "SHA256 verified."
 
 if [ "$EXT" = "tar.gz" ]; then
   tar -xzf "$TMP/archive.${EXT}" -C "$TMP"

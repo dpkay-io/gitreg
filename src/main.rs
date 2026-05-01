@@ -24,6 +24,29 @@ fn open_db() -> Result<Database> {
     Database::open(&db_path()?)
 }
 
+fn log_path() -> Option<PathBuf> {
+    Some(dirs::config_dir()?.join("gitreg").join("gitreg.log"))
+}
+
+fn log_hook_error(err: &GitregError) {
+    let Some(path) = log_path() else { return };
+    let line = format!(
+        "{} hook error: {err}\n",
+        Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
+    );
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
 #[derive(Tabled)]
 struct LsRow {
     #[tabled(rename = "ID")]
@@ -149,8 +172,12 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
 
     while let Some((current, depth)) = queue.pop_front() {
         if current.join(".git").is_dir() {
-            let s = current.to_string_lossy();
-            match db.upsert(s.as_ref()) {
+            let Some(s) = current.to_str() else {
+                eprintln!("  warning: skipping non-UTF-8 path: {}", current.display());
+                warnings += 1;
+                continue;
+            };
+            match db.upsert(s) {
                 Ok(()) => {
                     println!("  {}", s);
                     found += 1;
@@ -204,7 +231,12 @@ fn main() {
     #[cfg(windows)]
     {
         if let Ok(exe) = std::env::current_exe() {
-            let _ = std::fs::remove_file(exe.with_extension("exe.old"));
+            let old = exe.with_extension("exe.old");
+            if let Err(e) = std::fs::remove_file(&old) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("warning: could not remove {}: {e}", old.display());
+                }
+            }
         }
     }
 
@@ -212,7 +244,9 @@ fn main() {
 
     match &cli.command {
         Commands::Hook { path } => {
-            let _ = cmd_hook(path);
+            if let Err(e) = cmd_hook(path) {
+                log_hook_error(&e);
+            }
         }
         Commands::Init => {
             if let Err(e) = cmd_init() {
@@ -239,6 +273,11 @@ fn main() {
             }
         }
         Commands::Scan { dir, depth } => {
+            const MAX_SCAN_DEPTH: usize = 20;
+            if *depth > MAX_SCAN_DEPTH {
+                eprintln!("Error: --depth must be {MAX_SCAN_DEPTH} or less");
+                process::exit(1);
+            }
             let dir = match dir {
                 Some(d) => d.clone(),
                 None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),

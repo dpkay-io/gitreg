@@ -1,4 +1,5 @@
 use crate::error::{GitregError, Result};
+use sha2::{Digest, Sha256};
 use std::io::Read;
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -32,6 +33,7 @@ const BINARY_NAME: &str = "gitreg";
 
 const API_URL: &str = "https://api.github.com/repos/dpkay-io/gitreg/releases/latest";
 const DOWNLOAD_BASE: &str = "https://github.com/dpkay-io/gitreg/releases/latest/download";
+const MAX_DOWNLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
 fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
     let s = s.strip_prefix('v').unwrap_or(s);
@@ -83,6 +85,7 @@ fn download_archive(target: &str, ext: &str) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     response
         .into_reader()
+        .take(MAX_DOWNLOAD_BYTES)
         .read_to_end(&mut bytes)
         .map_err(|e| GitregError::Network(e.to_string()))?;
     Ok(bytes)
@@ -168,6 +171,47 @@ fn self_replace(new_bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+fn download_sha256_sidecar(target: &str, ext: &str) -> Result<[u8; 32]> {
+    let url = format!("{DOWNLOAD_BASE}/gitreg-latest-{target}.{ext}.sha256");
+    let response = ureq::get(&url)
+        .set(
+            "User-Agent",
+            &format!("gitreg/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .call()
+        .map_err(|e| GitregError::Network(e.to_string()))?;
+    let text = response
+        .into_string()
+        .map_err(|e| GitregError::Network(e.to_string()))?;
+    let text = text.trim_start_matches('\u{FEFF}'); // strip BOM if present
+    let hex = text
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| GitregError::Upgrade("sha256 sidecar file is empty".into()))?;
+    if hex.len() != 64 {
+        return Err(GitregError::Upgrade(format!(
+            "unexpected sha256 format ({} chars, want 64)",
+            hex.len()
+        )));
+    }
+    let mut hash = [0u8; 32];
+    for (i, byte) in hash.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16)
+            .map_err(|_| GitregError::Upgrade("invalid hex in sha256 sidecar".into()))?;
+    }
+    Ok(hash)
+}
+
+fn verify_archive_sha256(bytes: &[u8], expected: &[u8; 32]) -> Result<()> {
+    let actual: [u8; 32] = Sha256::digest(bytes).into();
+    if actual != *expected {
+        return Err(GitregError::Upgrade(
+            "SHA256 mismatch — archive may be corrupted or tampered with".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn run() -> Result<()> {
     if TARGET.is_empty() {
         return Err(GitregError::Upgrade(
@@ -194,6 +238,10 @@ pub fn run() -> Result<()> {
 
     println!("Upgrading to {latest_tag} ...");
     let archive = download_archive(TARGET, EXT)?;
+    print!("Verifying SHA256... ");
+    let expected_hash = download_sha256_sidecar(TARGET, EXT)?;
+    verify_archive_sha256(&archive, &expected_hash)?;
+    println!("OK");
     let binary = extract_binary(&archive)?;
     self_replace(&binary)?;
     println!("Upgraded to {latest_tag}.");

@@ -97,12 +97,25 @@ end
     )
 }
 
-pub fn inject_bash_zsh(rc_path: &Path) -> Result<()> {
-    let existing = if rc_path.exists() {
-        fs::read_to_string(rc_path)?
+const MAX_RC_BYTES: u64 = 10 * 1024 * 1024;
+
+fn read_rc_file(path: &Path) -> Result<String> {
+    if path.exists() {
+        if fs::metadata(path)?.len() > MAX_RC_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "rc file exceeds 10 MiB limit",
+            )
+            .into());
+        }
+        Ok(fs::read_to_string(path)?)
     } else {
-        String::new()
-    };
+        Ok(String::new())
+    }
+}
+
+pub fn inject_bash_zsh(rc_path: &Path) -> Result<()> {
+    let existing = read_rc_file(rc_path)?;
 
     if existing.contains(GUARD_START) {
         return Err(GitregError::AlreadyInitialized(rc_path.to_path_buf()));
@@ -121,17 +134,26 @@ pub fn inject_bash_zsh(rc_path: &Path) -> Result<()> {
 }
 
 pub fn inject_fish(fish_path: &Path) -> Result<()> {
-    if fish_path.exists() {
-        let existing = fs::read_to_string(fish_path)?;
-        if existing.contains(GUARD_START) {
+    let existing = {
+        let content = read_rc_file(fish_path)?;
+        if content.contains(GUARD_START) {
             return Err(GitregError::AlreadyInitialized(fish_path.to_path_buf()));
         }
-    }
+        content
+    };
 
     if let Some(parent) = fish_path.parent() {
         fs::create_dir_all(parent)?;
     }
 
-    fs::write(fish_path, fish_shim())?;
+    let mut content = existing;
+    if !content.ends_with('\n') && !content.is_empty() {
+        content.push('\n');
+    }
+    content.push('\n');
+    content.push_str(&fish_shim());
+    content.push('\n');
+
+    fs::write(fish_path, content)?;
     Ok(())
 }

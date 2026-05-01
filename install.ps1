@@ -20,6 +20,16 @@ try {
     Write-Host "Downloading gitreg for $Target ..."
     Invoke-WebRequest -Uri $Url -OutFile $Archive -UseBasicParsing
 
+    $Sha256File = Join-Path $TmpDir 'gitreg.sha256'
+    Invoke-WebRequest -Uri "$Url.sha256" -OutFile $Sha256File -UseBasicParsing
+
+    $ExpectedHash = ((Get-Content $Sha256File -Raw).Trim() -split '\s+')[0].ToUpper()
+    $ActualHash   = (Get-FileHash -Path $Archive -Algorithm SHA256).Hash
+    if ($ActualHash -ne $ExpectedHash) {
+        throw "SHA256 mismatch — archive may be corrupted or tampered with.`nExpected: $ExpectedHash`nActual:   $ActualHash"
+    }
+    Write-Host "SHA256 verified."
+
     $ExtractDir = Join-Path $TmpDir 'extracted'
     Expand-Archive -Path $Archive -DestinationPath $ExtractDir -Force
 

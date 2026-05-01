@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Zero-latency background Git repository tracker"
 license = "MIT"
-authors = ["Deepak Jha <deepakjha.dpk@gmail.com>"]
+authors = ["Deepak Jha <hello@dpkay.com>"]
 repository = "https://github.com/dpkay-io/gitreg"
 readme = "README.md"
 keywords = ["git", "repository", "tracker", "productivity", "cli"]
@@ -21,6 +21,7 @@ thiserror  = "1"
 ureq    = { version = "2", default-features = false, features = ["tls"] }
 flate2  = { version = "1", default-features = false, features = ["rust_backend"] }
 tar     = "0.4"
+sha2    = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 zip = { version = "2", default-features = false, features = ["deflate"] }
