@@ -102,11 +102,7 @@ const MAX_RC_BYTES: u64 = 10 * 1024 * 1024;
 fn read_rc_file(path: &Path) -> Result<String> {
     if path.exists() {
         if fs::metadata(path)?.len() > MAX_RC_BYTES {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "rc file exceeds 10 MiB limit",
-            )
-            .into());
+            return Err(std::io::Error::other("rc file exceeds 10 MiB limit").into());
         }
         Ok(fs::read_to_string(path)?)
     } else {
