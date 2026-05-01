@@ -15,13 +15,8 @@ pub enum GitregError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[cfg(not(windows))]
     #[error("gitreg already initialized in {0}")]
     AlreadyInitialized(PathBuf),
-
-    #[cfg(windows)]
-    #[error("`gitreg init` is not supported on Windows; use WSL or Git Bash")]
-    UnsupportedPlatform,
 
     #[error("network error: {0}")]
     Network(String),

@@ -2,7 +2,6 @@ mod cli;
 mod db;
 mod error;
 mod hook;
-#[cfg(not(windows))]
 mod shell;
 mod upgrade;
 
@@ -50,7 +49,7 @@ fn log_hook_error(err: &GitregError) {
 #[derive(Tabled)]
 struct LsRow {
     #[tabled(rename = "#")]
-    row_num: usize,
+    row_num: String,
     #[tabled(rename = "Name")]
     name: String,
     #[tabled(rename = "ID")]
@@ -61,6 +60,32 @@ struct LsRow {
     tags: String,
     #[tabled(rename = "Last Git Cmd")]
     last_seen: String,
+}
+
+fn to_roman(mut n: usize) -> String {
+    const VALS: &[(usize, &str)] = &[
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ];
+    let mut s = String::new();
+    for &(val, sym) in VALS {
+        while n >= val {
+            s.push_str(sym);
+            n -= val;
+        }
+    }
+    s
 }
 
 impl LsRow {
@@ -75,7 +100,7 @@ impl LsRow {
             .format("%Y-%m-%d %H:%M:%S")
             .to_string();
         Self {
-            row_num,
+            row_num: to_roman(row_num),
             id: r.id,
             name: r.name.unwrap_or_default(),
             path: r.path,
@@ -85,24 +110,29 @@ impl LsRow {
     }
 }
 
-#[cfg(windows)]
-fn cmd_init() -> Result<()> {
-    Err(GitregError::UnsupportedPlatform)
-}
-
-#[cfg(not(windows))]
 fn cmd_init() -> Result<()> {
     let sh = shell::detect_shell();
     let rc = shell::rc_file_path(&sh)?;
 
-    match sh {
-        shell::Shell::Fish => shell::inject_fish(&rc)?,
-        _ => shell::inject_bash_zsh(&rc)?,
-    }
+    let reload_hint = match sh {
+        shell::ShellKind::Fish => {
+            shell::inject_fish(&rc)?;
+            format!("source {}", rc.display())
+        }
+        #[cfg(windows)]
+        shell::ShellKind::PowerShell => {
+            shell::inject_powershell(&rc)?;
+            format!(". '{}'", rc.display())
+        }
+        _ => {
+            shell::inject_bash_zsh(&rc)?;
+            format!("source {}", rc.display())
+        }
+    };
 
     println!("gitreg initialized.");
     println!("Shell shim written to: {}", rc.display());
-    println!("Restart your shell or run:  source {}", rc.display());
+    println!("Restart your shell or run:  {reload_hint}");
     Ok(())
 }
 

@@ -66,9 +66,7 @@ gitreg init
 irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
 ```
 
-> **Note:** The `gitreg init` shell shim (auto-tracking on every `git` command) requires a POSIX shell.
-> Use **Git Bash** or **WSL** to enable it. All other commands — `gitreg scan`, `gitreg ls`,
-> `gitreg prune`, `gitreg rm`, `gitreg upgrade` — work fully in native PowerShell.
+`gitreg init` works natively in PowerShell (PS 5.1 and PS 7+), Git Bash, and WSL.
 
 **Git Bash** and **WSL** users can also use the [Quick install](#quick-install) bash command above,
 or install manually:
@@ -166,8 +164,10 @@ On Windows the old binary is briefly renamed to `gitreg.exe.old` during the swap
 | Bash | `~/.bashrc` |
 | Zsh | `~/.zshrc` |
 | Fish | `~/.config/fish/functions/git.fish` |
+| PowerShell 7+ | `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` |
+| PowerShell 5.1 | `~\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` |
 
-Windows users can use **Git Bash** or **WSL** for shell-shim auto-tracking. The `gitreg` binary installs and runs natively in PowerShell; only `gitreg init` requires a POSIX shell.
+On Windows, `gitreg init` detects the shell automatically: Git Bash and other POSIX shells (Cygwin, MSYS2) are identified via `$SHELL`; native PowerShell is the fallback when `$SHELL` is not set.
 
 ---
 
