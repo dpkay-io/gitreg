@@ -30,7 +30,14 @@ fn now_millis() -> i64 {
 fn init_conn(conn: &Connection) -> Result<()> {
     conn.busy_timeout(Duration::from_millis(5_000))?;
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
-    conn.execute_batch(SCHEMA)?;
+    let table_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='repos')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        conn.execute_batch(SCHEMA)?;
+    }
     Ok(())
 }
 
