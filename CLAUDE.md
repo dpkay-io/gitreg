@@ -40,6 +40,10 @@ actionlint .github/workflows/*.yml
   ```
 - Long method chains that exceed 100 characters must be broken one method per line.
 
+## Commit authorship
+
+Never add AI attribution to commits, PRs, comments, or any output. No `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" footers, no AI signatures of any kind.
+
 ## CI pipeline
 
 Steps run on Ubuntu, macOS, and Windows: `fmt` → `clippy` → `test` → `build` → `audit` → `integration tests` (Unix only).

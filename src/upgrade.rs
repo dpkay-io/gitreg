@@ -73,7 +73,7 @@ fn fetch_latest_tag() -> Result<String> {
 }
 
 fn download_archive(target: &str, ext: &str) -> Result<Vec<u8>> {
-    let url = format!("{DOWNLOAD_BASE}/gitreg-latest-{target}.{ext}");
+    let url = format!("{DOWNLOAD_BASE}/gitreg-{target}.{ext}");
     println!("Downloading {url} ...");
     let response = ureq::get(&url)
         .set(
@@ -172,7 +172,7 @@ fn self_replace(new_bytes: &[u8]) -> Result<()> {
 }
 
 fn download_sha256_sidecar(target: &str, ext: &str) -> Result<[u8; 32]> {
-    let url = format!("{DOWNLOAD_BASE}/gitreg-latest-{target}.{ext}.sha256");
+    let url = format!("{DOWNLOAD_BASE}/gitreg-{target}.{ext}.sha256");
     let response = ureq::get(&url)
         .set(
             "User-Agent",

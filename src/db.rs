@@ -1,7 +1,7 @@
 use crate::error::Result;
 use rusqlite::{params, Connection};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct Database {
     conn: Connection,
@@ -29,6 +29,7 @@ fn now_millis() -> i64 {
 
 fn init_conn(conn: &Connection) -> Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    conn.busy_timeout(Duration::from_millis(5_000))?;
     conn.execute_batch(SCHEMA)?;
     Ok(())
 }
@@ -104,6 +105,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn upsert_and_list() {
@@ -144,6 +146,25 @@ mod tests {
         let removed = db.prune().unwrap();
         assert_eq!(removed.len(), 0);
         assert_eq!(db.list().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn concurrent_upserts_do_not_deadlock() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = Arc::new(dir.path().join("gitreg.db"));
+        let handles: Vec<_> = (0..20_usize)
+            .map(|i| {
+                let p = Arc::clone(&db_path);
+                std::thread::spawn(move || {
+                    let db = Database::open(&p).unwrap();
+                    db.upsert(&format!("/tmp/repo_{i}")).unwrap();
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(Database::open(&db_path).unwrap().list().unwrap().len(), 20);
     }
 
     #[test]
