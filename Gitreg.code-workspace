@@ -1,0 +1,19 @@
+{
+  "folders": [
+    {
+      "name": "Gitreg [main]",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "window.title": "Gitreg ${separator} ${activeRepositoryBranchName} ${separator} ${activeEditorShort}",
+    "workbench.colorCustomizations": {
+      "titleBar.activeBackground": "#000000",
+      "titleBar.inactiveBackground": "#000000",
+      "titleBar.activeForeground": "#ffffff",
+      "titleBar.inactiveForeground": "#ffffff",
+      "statusBar.background": "#000000",
+      "statusBar.foreground": "#ffffff"
+    }
+  }
+}
