@@ -64,6 +64,21 @@ pub fn rc_file_path(shell: &ShellKind) -> Result<PathBuf> {
     }
 }
 
+/// Returns profile paths for both Windows PowerShell 5.1 and PowerShell 7+.
+/// `gitreg init` injects into all of them so the shim works regardless of
+/// which PS version the user runs, and regardless of which version was active
+/// when `gitreg init` was called.
+#[cfg(windows)]
+pub fn powershell_profile_paths() -> Result<Vec<PathBuf>> {
+    let docs = dirs::document_dir().ok_or(GitregError::NoConfigDir)?;
+    Ok(vec![
+        docs.join("WindowsPowerShell")
+            .join("Microsoft.PowerShell_profile.ps1"),
+        docs.join("PowerShell")
+            .join("Microsoft.PowerShell_profile.ps1"),
+    ])
+}
+
 fn bash_zsh_shim() -> String {
     format!(
         r#"{start}

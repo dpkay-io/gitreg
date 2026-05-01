@@ -48,12 +48,10 @@ fn log_hook_error(err: &GitregError) {
 
 #[derive(Tabled)]
 struct LsRow {
-    #[tabled(rename = "#")]
-    row_num: String,
-    #[tabled(rename = "Name")]
-    name: String,
     #[tabled(rename = "ID")]
     id: i64,
+    #[tabled(rename = "Name")]
+    name: String,
     #[tabled(rename = "Path")]
     path: String,
     #[tabled(rename = "Tags")]
@@ -62,34 +60,8 @@ struct LsRow {
     last_seen: String,
 }
 
-fn to_roman(mut n: usize) -> String {
-    const VALS: &[(usize, &str)] = &[
-        (1000, "M"),
-        (900, "CM"),
-        (500, "D"),
-        (400, "CD"),
-        (100, "C"),
-        (90, "XC"),
-        (50, "L"),
-        (40, "XL"),
-        (10, "X"),
-        (9, "IX"),
-        (5, "V"),
-        (4, "IV"),
-        (1, "I"),
-    ];
-    let mut s = String::new();
-    for &(val, sym) in VALS {
-        while n >= val {
-            s.push_str(sym);
-            n -= val;
-        }
-    }
-    s
-}
-
 impl LsRow {
-    fn new(row_num: usize, r: RepoRecord) -> Self {
+    fn new(r: RepoRecord) -> Self {
         let secs = r.last_seen / 1000;
         let nsecs = ((r.last_seen % 1000) * 1_000_000) as u32;
         let dt = Utc
@@ -100,7 +72,6 @@ impl LsRow {
             .format("%Y-%m-%d %H:%M:%S")
             .to_string();
         Self {
-            row_num: to_roman(row_num),
             id: r.id,
             name: r.name.unwrap_or_default(),
             path: r.path,
@@ -112,18 +83,40 @@ impl LsRow {
 
 fn cmd_init() -> Result<()> {
     let sh = shell::detect_shell();
-    let rc = shell::rc_file_path(&sh)?;
 
+    #[cfg(windows)]
+    if let shell::ShellKind::PowerShell = &sh {
+        let paths = shell::powershell_profile_paths()?;
+        let mut injected: Vec<PathBuf> = Vec::new();
+        for path in &paths {
+            match shell::inject_powershell(path) {
+                Ok(()) => injected.push(path.clone()),
+                Err(GitregError::AlreadyInitialized(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        if injected.is_empty() {
+            return Err(GitregError::AlreadyInitialized(paths[0].clone()));
+        }
+        println!("gitreg initialized.");
+        for path in &injected {
+            println!("Shell shim written to: {}", path.display());
+        }
+        println!("Restart your shell or run in each active terminal:");
+        for path in &injected {
+            println!("  . '{}'", path.display());
+        }
+        return Ok(());
+    }
+
+    let rc = shell::rc_file_path(&sh)?;
     let reload_hint = match sh {
         shell::ShellKind::Fish => {
             shell::inject_fish(&rc)?;
             format!("source {}", rc.display())
         }
         #[cfg(windows)]
-        shell::ShellKind::PowerShell => {
-            shell::inject_powershell(&rc)?;
-            format!(". '{}'", rc.display())
-        }
+        shell::ShellKind::PowerShell => unreachable!(),
         _ => {
             shell::inject_bash_zsh(&rc)?;
             format!("source {}", rc.display())
@@ -148,11 +141,8 @@ fn cmd_ls() -> Result<()> {
         println!("No repositories tracked yet.");
         return Ok(());
     }
-    let rows: Vec<LsRow> = records
-        .into_iter()
-        .enumerate()
-        .map(|(i, r)| LsRow::new(i + 1, r))
-        .collect();
+    println!("{} git dirs", records.len());
+    let rows: Vec<LsRow> = records.into_iter().map(LsRow::new).collect();
     println!("{}", Table::new(rows));
     Ok(())
 }
