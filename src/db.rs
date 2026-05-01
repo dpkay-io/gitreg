@@ -28,8 +28,8 @@ fn now_millis() -> i64 {
 }
 
 fn init_conn(conn: &Connection) -> Result<()> {
-    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.busy_timeout(Duration::from_millis(5_000))?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch(SCHEMA)?;
     Ok(())
 }
@@ -152,6 +152,9 @@ mod tests {
     fn concurrent_upserts_do_not_deadlock() {
         let dir = tempfile::tempdir().unwrap();
         let db_path = Arc::new(dir.path().join("gitreg.db"));
+        // Initialize WAL mode and schema before concurrent access to avoid a
+        // race where 20 threads simultaneously attempt the DELETE→WAL transition.
+        drop(Database::open(&db_path).unwrap());
         let handles: Vec<_> = (0..20_usize)
             .map(|i| {
                 let p = Arc::clone(&db_path);
