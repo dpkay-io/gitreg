@@ -56,11 +56,10 @@ try {
     }
 
     & "$ExeDest" init
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ""
-        Write-Host "Note: Shell auto-tracking (the git() shim) requires Git Bash or WSL."
-        Write-Host "      gitreg is installed and ready — run 'gitreg scan ~' to populate the registry."
-    }
+    Write-Host ""
+    & "$ExeDest" autoscan
+    Write-Host ""
+    Write-Host "gitreg is installed and ready."
 } finally {
     if (Test-Path $TmpDir) {
         Remove-Item -Path $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
