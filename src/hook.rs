@@ -3,21 +3,25 @@ use crate::error::Result;
 use std::io::Write;
 use std::path::Path;
 
-pub fn run(raw_path: &Path, db: &Database) -> Result<()> {
+pub fn run(raw_path: &Path, db: &Database) -> Result<bool> {
     let canonical = dunce::canonicalize(raw_path)?;
 
     if !canonical.join(".git").is_dir() {
-        return Ok(());
+        return Ok(false);
     }
 
     let canonical_str = match canonical.to_str() {
         Some(s) => s,
-        None => return Ok(()), // non-UTF-8 path — silent skip
+        None => return Ok(false), // non-UTF-8 path — silent skip
     };
+
+    if db.is_excluded(canonical_str)? {
+        return Ok(false);
+    }
 
     let git_dir = canonical.join(".git");
     let name = extract_repo_name(&git_dir);
-    db.upsert(canonical_str, name.as_deref())?;
+    let registered = db.upsert(canonical_str, name.as_deref())?;
 
     let marker = git_dir.join("gitreg_tracked");
     let tmp = git_dir.join("gitreg_tracked.tmp");
@@ -29,7 +33,7 @@ pub fn run(raw_path: &Path, db: &Database) -> Result<()> {
 
     std::fs::rename(&tmp, &marker)?;
 
-    Ok(())
+    Ok(registered)
 }
 
 fn extract_repo_name(git_dir: &Path) -> Option<String> {

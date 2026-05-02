@@ -29,6 +29,9 @@ pub enum GitregError {
 
     #[error("no repository found matching '{0}'")]
     NotFound(String),
+
+    #[error("invalid format: {0}")]
+    InvalidFormat(String),
 }
 
 pub type Result<T> = std::result::Result<T, GitregError>;

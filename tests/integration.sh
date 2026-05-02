@@ -39,7 +39,7 @@ ok "ls shows both repos"
 rm -rf "$REPO_B"
 
 # Prune should remove repo_b
-PRUNE_OUT=$("$GITREG" prune)
+PRUNE_OUT=$("$GITREG" repo prune)
 echo "$PRUNE_OUT" | grep -q "$REPO_B" || fail "prune did not report repo_b"
 ok "prune removed missing repo"
 
@@ -50,7 +50,7 @@ echo "$LS_OUT2" | grep -q "$REPO_A" || fail "repo_a missing after prune"
 ok "ls correct after prune"
 
 # Remove repo_a via rm command
-"$GITREG" rm "$REPO_A"
+"$GITREG" repo rm "$REPO_A"
 
 # Marker must NOT be deleted — its presence prevents the shell shim from
 # ever calling the hook again (shim checks: if marker content == git_root,
