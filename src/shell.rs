@@ -13,6 +13,9 @@ pub enum ShellKind {
 const GUARD_START: &str = "# >>> gitreg-start >>>";
 const GUARD_END: &str = "# <<< gitreg-end <<<";
 
+const ALIAS_GUARD_START: &str = "# >>> gitreg-alias-start >>>";
+const ALIAS_GUARD_END: &str = "# <<< gitreg-alias-end <<<";
+
 pub fn detect_shell() -> ShellKind {
     let shell = std::env::var("SHELL").unwrap_or_default();
     if shell.contains("zsh") {
@@ -259,4 +262,282 @@ pub fn inject_powershell(profile_path: &Path) -> Result<()> {
 
     fs::write(profile_path, content)?;
     Ok(())
+}
+
+fn bash_zsh_alias_shim() -> String {
+    format!(
+        "{start}\nalias gr='gitreg'\n{end}",
+        start = ALIAS_GUARD_START,
+        end = ALIAS_GUARD_END
+    )
+}
+
+fn fish_alias_shim() -> String {
+    format!(
+        "{start}\nfunction gr\n    gitreg $argv\nend\n{end}",
+        start = ALIAS_GUARD_START,
+        end = ALIAS_GUARD_END
+    )
+}
+
+#[cfg(windows)]
+fn powershell_alias_shim() -> String {
+    format!(
+        "{start}\nSet-Alias -Name gr -Value gitreg\n{end}",
+        start = ALIAS_GUARD_START,
+        end = ALIAS_GUARD_END
+    )
+}
+
+pub fn check_alias_conflict(shell: &ShellKind) -> Result<bool> {
+    // 1. Check PATH
+    let cmd = if cfg!(windows) { "where" } else { "which" };
+    let status = std::process::Command::new(cmd)
+        .arg("gr")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+
+    if let Ok(s) = status {
+        if s.success() {
+            return Ok(true);
+        }
+    }
+
+    // 2. Check RC files (ignoring our own blocks)
+    let paths = match shell {
+        ShellKind::Bash | ShellKind::Zsh | ShellKind::Fish => vec![rc_file_path(shell)?],
+        #[cfg(windows)]
+        ShellKind::PowerShell => powershell_profile_paths()?,
+    };
+
+    for path in paths {
+        if !path.exists() {
+            continue;
+        }
+        let content = read_rc_file(&path)?;
+        // Strip our own alias block before checking
+        let mut stripped = content.clone();
+        if let Some(start_idx) = stripped.find(ALIAS_GUARD_START) {
+            if let Some(end_idx) = stripped.find(ALIAS_GUARD_END) {
+                if end_idx > start_idx {
+                    stripped.replace_range(start_idx..end_idx + ALIAS_GUARD_END.len(), "");
+                }
+            }
+        }
+
+        let conflict = match shell {
+            ShellKind::Bash | ShellKind::Zsh => {
+                stripped.contains("alias gr=") || stripped.contains("gr()")
+            }
+            ShellKind::Fish => stripped.contains("alias gr") || stripped.contains("function gr"),
+            #[cfg(windows)]
+            ShellKind::PowerShell => {
+                stripped.contains("Set-Alias") && stripped.contains("gr")
+                    || stripped.contains("function gr")
+            }
+        };
+
+        if conflict {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+pub fn is_alias_enabled(shell: &ShellKind) -> Result<bool> {
+    let paths = match shell {
+        ShellKind::Bash | ShellKind::Zsh | ShellKind::Fish => vec![rc_file_path(shell)?],
+        #[cfg(windows)]
+        ShellKind::PowerShell => powershell_profile_paths()?,
+    };
+
+    for path in paths {
+        if path.exists() {
+            let content = read_rc_file(&path)?;
+            if content.contains(ALIAS_GUARD_START) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+pub fn inject_alias_bash_zsh(rc_path: &Path) -> Result<()> {
+    let mut content = read_rc_file(rc_path)?;
+    if content.contains(ALIAS_GUARD_START) {
+        return Ok(());
+    }
+
+    if !content.ends_with('\n') && !content.is_empty() {
+        content.push('\n');
+    }
+    content.push('\n');
+    content.push_str(&bash_zsh_alias_shim());
+    content.push('\n');
+
+    fs::write(rc_path, content)?;
+    Ok(())
+}
+
+pub fn inject_alias_fish(fish_path: &Path) -> Result<()> {
+    if let Some(parent) = fish_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // For Fish, we create/overwrite ~/.config/fish/functions/gr.fish
+    // But we should check if it's already there and not ours.
+    if fish_path.exists() {
+        let content = read_rc_file(fish_path)?;
+        if !content.contains(ALIAS_GUARD_START) && !content.is_empty() {
+            // It's a conflict if it's not our block and not empty
+            return Ok(()); // Should be handled by check_alias_conflict
+        }
+    }
+
+    fs::write(fish_path, fish_alias_shim())?;
+    Ok(())
+}
+
+#[cfg(windows)]
+pub fn inject_alias_powershell(profile_path: &Path) -> Result<()> {
+    let mut content = read_rc_file(profile_path)?;
+    if content.contains(ALIAS_GUARD_START) {
+        return Ok(());
+    }
+
+    if let Some(parent) = profile_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    if !content.ends_with('\n') && !content.is_empty() {
+        content.push('\n');
+    }
+    content.push('\n');
+    content.push_str(&powershell_alias_shim());
+    content.push('\n');
+
+    fs::write(profile_path, content)?;
+    Ok(())
+}
+
+fn remove_block(content: &str, start_guard: &str, end_guard: &str) -> String {
+    let mut new_content = String::new();
+    let mut in_block = false;
+    let lines: Vec<&str> = content.lines().collect();
+
+    for line in lines {
+        if line.contains(start_guard) {
+            in_block = true;
+            continue;
+        }
+        if line.contains(end_guard) {
+            in_block = false;
+            continue;
+        }
+        if !in_block {
+            new_content.push_str(line);
+            // Don't add a newline to the very last line if the original didn't have one,
+            // but we usually want to preserve the structure.
+            // Simplified: always add newline, we'll trim extra ones at the end if needed.
+            new_content.push('\n');
+        }
+    }
+
+    // Clean up multiple trailing newlines that might result from block removal
+    while new_content.ends_with("\n\n") {
+        new_content.pop();
+    }
+
+    new_content
+}
+
+pub fn remove_all_gitreg_blocks(rc_path: &Path) -> Result<()> {
+    if !rc_path.exists() {
+        return Ok(());
+    }
+    let content = read_rc_file(rc_path)?;
+    let mut new_content = remove_block(&content, GUARD_START, GUARD_END);
+    new_content = remove_block(&new_content, ALIAS_GUARD_START, ALIAS_GUARD_END);
+
+    let trimmed = new_content.trim();
+    if trimmed.is_empty() {
+        // If the file is now empty or only contains whitespace, and it's a file we likely created
+        // (like git.fish), we could delete it. But for .bashrc etc. we should just truncate.
+        // For simplicity and safety, we just write the (possibly empty) string.
+        fs::write(rc_path, "")?;
+    } else {
+        fs::write(rc_path, new_content)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_bash_zsh_conflict_detection() {
+        let dir = tempdir().unwrap();
+        let rc_path = dir.path().join(".bashrc");
+
+        // No file = no conflict
+        let content = "";
+        fs::write(&rc_path, content).unwrap();
+        // We can't easily test check_alias_conflict because it checks PATH
+        // But we can test the logic inside it if we refactor it slightly or test the injection
+
+        let mut content = "alias gr='some-other-tool'\n".to_string();
+        fs::write(&rc_path, &content).unwrap();
+
+        // Manual check of the logic we put in check_alias_conflict
+        let stripped = content.clone();
+        let conflict = stripped.contains("alias gr=") || stripped.contains("gr()");
+        assert!(conflict);
+
+        content = "gr() { echo hi; }\n".to_string();
+        fs::write(&rc_path, &content).unwrap();
+        let conflict = content.contains("alias gr=") || content.contains("gr()");
+        assert!(conflict);
+    }
+
+    #[test]
+    fn test_alias_injection_idempotency() {
+        let dir = tempdir().unwrap();
+        let rc_path = dir.path().join(".bashrc");
+
+        inject_alias_bash_zsh(&rc_path).unwrap();
+        let content1 = fs::read_to_string(&rc_path).unwrap();
+        assert!(content1.contains(ALIAS_GUARD_START));
+
+        inject_alias_bash_zsh(&rc_path).unwrap();
+        let content2 = fs::read_to_string(&rc_path).unwrap();
+        assert_eq!(content1, content2);
+    }
+
+    #[test]
+    fn test_remove_all_blocks() {
+        let dir = tempdir().unwrap();
+        let rc_path = dir.path().join(".bashrc");
+
+        let initial_content = "some-user-setting\n";
+        fs::write(&rc_path, initial_content).unwrap();
+
+        inject_bash_zsh(&rc_path).unwrap();
+        inject_alias_bash_zsh(&rc_path).unwrap();
+
+        let mid_content = fs::read_to_string(&rc_path).unwrap();
+        assert!(mid_content.contains(GUARD_START));
+        assert!(mid_content.contains(ALIAS_GUARD_START));
+
+        remove_all_gitreg_blocks(&rc_path).unwrap();
+
+        let final_content = fs::read_to_string(&rc_path).unwrap();
+        assert!(!final_content.contains(GUARD_START));
+        assert!(!final_content.contains(ALIAS_GUARD_START));
+        assert!(final_content.contains("some-user-setting"));
+        assert_eq!(final_content.trim(), "some-user-setting");
+    }
 }

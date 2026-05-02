@@ -115,4 +115,6 @@ fi
 gitreg init
 
 echo ""
-echo "gitreg is installed. Run 'gitreg scan ~' to populate the registry."
+gitreg autoscan
+echo ""
+echo "gitreg is installed and ready."

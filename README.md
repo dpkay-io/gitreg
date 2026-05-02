@@ -1,203 +1,116 @@
 # gitreg
 
-Zero-latency background Git repository tracker.
+**Zero-latency background Git repository tracker.**
 
-The user's `git` command is **never blocked** — the hook runs in the background.
+`gitreg` automatically tracks every Git repository you visit, without ever slowing down your `git` commands. It provides a powerful registry to manage, tag, and execute bulk operations across your local repositories.
 
 ---
 
-## Installation
+## ⚡ Quick Install
 
-### Quick install
-
-#### Linux, macOS, Git Bash, WSL
+### Linux, macOS, Git Bash, WSL
 
 ```sh
 curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
 ```
 
-Then follow the `source` instruction printed at the end.
-
-#### Windows (native PowerShell)
+### Windows (Native PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
 ```
 
-Open a new terminal after installation so the updated PATH takes effect.
+*After installation, run `gitreg init` to set up your shell.*
 
-### From source (all platforms)
+---
 
-Requires [Rust](https://rustup.rs/).
+## 🚀 Key Features
 
+### 1. Zero-Latency Tracking
+Once initialized, `gitreg` works in the background. Every time you run a `git` command in a repository, `gitreg` ensures it's registered. The registration happens in a detached background process—your workflow is never blocked.
+
+### 2. Powerful Registry (`ls`)
+See all your repositories in one place, with metadata like last-seen timestamps and custom tags.
 ```sh
-cargo install --path .
-gitreg init
-# Restart shell or source the rc file shown by the init output
+gitreg ls
 ```
 
-### Pre-built binaries
-
-Download the archive for your platform from the [Releases](../../releases) page:
-
-| Platform | Archive |
-|---|---|
-| Linux x86_64 (static) | `gitreg-x86_64-unknown-linux-musl.tar.gz` |
-| Linux ARM64 (static) | `gitreg-aarch64-unknown-linux-musl.tar.gz` |
-| macOS Intel | `gitreg-x86_64-apple-darwin.tar.gz` |
-| macOS Apple Silicon | `gitreg-aarch64-apple-darwin.tar.gz` |
-| Windows x86_64 | `gitreg-x86_64-pc-windows-msvc.zip` |
-
-Extract the binary, place it on your `PATH`, then run `gitreg init`.
-
-### Linux / macOS
-
+### 3. Smart Tagging
+Organize your repositories with tags (e.g., `work`, `personal`, `oss`).
 ```sh
-tar xzf gitreg-*.tar.gz
-sudo mv gitreg /usr/local/bin/
-gitreg init
-# Restart shell or: source ~/.bashrc  (or ~/.zshrc)
+gitreg repo tag <id|name|path> work
 ```
 
-### Windows
-
-**Native PowerShell** (recommended):
-```powershell
-irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
+### 4. Bulk Execution
+Run any `git` command across multiple repositories filtered by tags.
+```sh
+gitreg git --tag work fetch --all
 ```
 
-`gitreg init` works natively in PowerShell (PS 5.1 and PS 7+), Git Bash, and WSL.
-
-**Git Bash** and **WSL** users can also use the [Quick install](#quick-install) bash command above,
-or install manually:
-
-**Git Bash:**
+### 5. Emergency Safety Net
+A "panic button" for your code. Force push all uncommitted changes across your tracked repositories to an emergency branch.
 ```sh
-# Run inside Git Bash
-unzip gitreg-x86_64-pc-windows-msvc.zip
-mv gitreg.exe /usr/local/bin/
-gitreg init
-source ~/.bashrc
+gitreg emergency
 ```
 
-**WSL (Windows Subsystem for Linux):**
+### 6. Built for Builders (Integrators)
+`gitreg` isn't just a tool; it's a platform. You can build your own applications on top of the `gitreg` registry. Register your apps to receive events whenever repositories are visited, tagged, or updated.
 ```sh
-# Run inside WSL — download the Linux musl binary instead
-tar xzf gitreg-x86_64-unknown-linux-musl.tar.gz
-sudo mv gitreg /usr/local/bin/
-gitreg init
-source ~/.bashrc
+gitreg integrator register my-app git.commit
 ```
 
 ---
 
-## Commands
+## 🛠️ Commands Reference
 
+### Main Commands
 | Command | Description |
 |---|---|
-| `gitreg init` | Detect shell, inject shim into rc file |
-| `gitreg ls` | List all tracked repositories with ID, name, path, tags, and last-seen timestamp (local timezone) |
-| `gitreg tag <target> <tag>` | Add a tag to a repository; `<target>` is an ID, `owner/repo` name, or path |
-| `gitreg untag <target> <tag>` | Remove a tag from a repository |
-| `gitreg scan [dir] [-d <depth>]` | Scan a directory tree and register all found git repos (default depth: 3) |
-| `gitreg prune` | Remove entries for repos that no longer exist on disk |
-| `gitreg rm <target>` | Remove a specific repo from the registry; `<target>` is an ID, `owner/repo` name, or path |
-| `gitreg upgrade` | Check for a newer release on GitHub and replace the binary in place |
+| `gitreg init` | Initialize gitreg and inject the shell shim |
+| `gitreg ls` | List all tracked repositories |
+| `gitreg git <args>` | Run a git command across multiple repositories |
+| `gitreg emergency` | Force push uncommitted code to an emergency branch |
 
-### Tagging example
-
-```
-$ gitreg ls
- ID  Name              Path                    Tags        Last Seen
- 1   octocat/hello     /home/user/hello                    2026-05-01 14:30:00 +0530
-
-$ gitreg tag 1 work
-added tag 'work'
-
-$ gitreg ls
- ID  Name              Path                    Tags        Last Seen
- 1   octocat/hello     /home/user/hello        work        2026-05-01 14:30:00 +0530
-
-$ gitreg tag octocat/hello personal
-added tag 'personal'
-
-$ gitreg untag 1 work
-removed tag 'work'
-```
-
----
-
-## Upgrading
-
-```sh
-gitreg upgrade
-```
-
-Checks the [GitHub Releases](../../releases) page for a newer version, downloads the correct pre-built binary for your platform, and replaces the running binary in place — no external tools needed.
-
-```
-Current version: v0.1.0
-Checking for updates... v0.2.0
-Upgrading to v0.2.0 ...
-Downloading https://github.com/.../gitreg-latest-x86_64-apple-darwin.tar.gz ...
-Upgraded to v0.2.0.
-```
-
-If you are already on the latest version:
-
-```
-Current version: v0.2.0
-Checking for updates... v0.2.0
-Already up to date (v0.2.0).
-```
-
-On Windows the old binary is briefly renamed to `gitreg.exe.old` during the swap and is automatically deleted on the next invocation.
-
-> **Note:** `gitreg upgrade` requires a network connection and a pre-built binary for your platform. It is not available for source builds on unsupported targets — use `cargo install --path .` to rebuild from source instead.
-
----
-
-## Shell Support
-
-| Shell | RC file modified |
+### Repository Management (`repo`)
+| Command | Description |
 |---|---|
-| Bash | `~/.bashrc` |
-| Zsh | `~/.zshrc` |
-| Fish | `~/.config/fish/functions/git.fish` |
-| PowerShell 7+ | `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` |
-| PowerShell 5.1 | `~\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` |
+| `gitreg repo ls` | Alias for top-level `ls` |
+| `gitreg repo scan <dir>` | Scan a directory tree for git repositories |
+| `gitreg repo tag <target> <tag>` | Add a tag to a repository |
+| `gitreg repo untag <target> <tag>` | Remove a tag from a repository |
+| `gitreg repo rm <target>` | Remove a repository from the registry |
+| `gitreg repo prune` | Remove entries for repositories that no longer exist |
 
-On Windows, `gitreg init` detects the shell automatically: Git Bash and other POSIX shells (Cygwin, MSYS2) are identified via `$SHELL`; native PowerShell is the fallback when `$SHELL` is not set.
+### Configuration (`config`)
+| Command | Description |
+|---|---|
+| `gitreg config alias` | Enable "gr" alias for "gitreg" |
+| `gitreg config autoprune` | Manage daily autoprune settings |
+| `gitreg config exclude <add\|rm\|ls>` | Manage path exclusions |
+
+### Integrator Platform (`integrator`)
+| Command | Description |
+|---|---|
+| `gitreg integrator register` | Register an app for an event |
+| `gitreg integrator unregister` | Unregister an app from an event |
+| `gitreg integrator ls` | List all registered apps |
+| `gitreg integrator events` | List all available events |
+
+### System & Maintenance (`system`)
+| Command | Description |
+|---|---|
+| `gitreg system upgrade` | Upgrade `gitreg` in place |
+| `gitreg system version` | Show current version |
+| `gitreg system uninstall` | Completely uninstall gitreg |
 
 ---
 
-## How it works
+## 📖 Learn More
 
-1. `gitreg init` injects a `git()` shell function into your rc file.
-2. Every time you run `git`, the shim walks up to find the repo root.
-3. If `.git/gitreg_tracked` is missing or contains a different path, it fires
-   `gitreg hook --path <root>` **as a disowned background process**.
-4. The hook canonicalizes the path, upserts it into `~/.config/gitreg/gitreg.db`,
-   and atomically writes the marker file.
-5. `command git "$@"` runs immediately — no waiting.
+For detailed installation options, architecture details, and more, see [DETAILS.md](./DETAILS.md).
 
 ---
 
-## Architecture Notes
+## License
 
-The `hook` subcommand is fire-and-forget by design. It runs detached from the
-shell and has no output channel, so errors are silently dropped. Contributors
-should not treat the discarded `Result` in `cmd_hook` as a bug — surfacing errors
-is not possible from a disowned background process.
-
----
-
-## Uninstall
-
-1. Remove the shim block from your rc file (between `# >>> gitreg-start >>>` and `# <<< gitreg-end <<<`).
-2. Delete the database:
-   - Linux / macOS / Git Bash / WSL: `rm ~/.config/gitreg/gitreg.db`
-   - Windows (native path): `del %APPDATA%\gitreg\gitreg.db`
-3. Optionally remove the binary:
-   - Installed via Cargo: `cargo uninstall gitreg`
-   - Installed manually: delete the `gitreg` (or `gitreg.exe`) file from wherever you placed it
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
