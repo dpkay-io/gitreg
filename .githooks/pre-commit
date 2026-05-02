@@ -1,7 +1,65 @@
-#!/bin/sh
+#!/bin/bash
 set -e
+
 echo "Running pre-commit checks..."
 cargo fmt -- --check
 cargo clippy -- -D warnings
 cargo test --locked
+
+# Version bump logic
+# Only bump on main branch
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+if [[ "$CURRENT_BRANCH" == "main" ]]; then
+    # Get current version from Cargo.toml (including staged changes)
+    CARGO_VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+
+    # Try to get remote
+    REMOTE=$(git config branch.main.remote || echo "origin")
+    REMOTE_URL=$(git remote get-url "$REMOTE" 2>/dev/null || echo "")
+
+    if [[ -n "$REMOTE_URL" ]]; then
+        echo "Checking remote for latest version..."
+        # Get latest version tag from remote
+        LATEST_TAG=$(git ls-remote --tags "$REMOTE_URL" 'refs/tags/v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null \
+          | grep -v '\^{}' \
+          | awk '{print $2}' \
+          | sed 's|refs/tags/||' \
+          | sort -V \
+          | tail -1)
+
+        if [[ -n "$LATEST_TAG" ]]; then
+            VER="${LATEST_TAG#v}"
+            IFS='.' read -r MAJ MIN PAT <<< "$VER"
+            IFS='.' read -r C_MAJ C_MIN C_PAT <<< "$CARGO_VER"
+            
+            # Smart check: if current version is already greater than latest tag,
+            # it means the version has already been bumped in this or a previous unpushed commit.
+            if (( C_MAJ > MAJ )) || \
+               (( C_MAJ == MAJ && C_MIN > MIN )) || \
+               (( C_MAJ == MAJ && C_MIN == MIN && C_PAT > PAT )); then
+                echo "Version is already bumped ($CARGO_VER > $VER). Skipping auto-bump."
+            else
+                NEW_VER="${MAJ}.${MIN}.$((PAT + 1))"
+                echo "Bumping version $CARGO_VER → $NEW_VER"
+                
+                # Update Cargo.toml
+                sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VER\"/" Cargo.toml
+                
+                # Update Cargo.lock
+                awk -v v="$NEW_VER" \
+                  '/^name = "gitreg"$/{found=1} found && /^version = /{sub(/"[^"]*"/, "\"" v "\""); found=0} {print}' \
+                  Cargo.lock > Cargo.lock.tmp && mv Cargo.lock.tmp Cargo.lock
+
+                # Stage changes so they are included in the same commit
+                git add Cargo.toml Cargo.lock
+                echo "Version bumped to v$NEW_VER (included in commit)"
+            fi
+        else
+            echo "No version tags found on remote. Skipping auto-bump."
+        fi
+    else
+        echo "No remote URL found for branch 'main'. Skipping version bump."
+    fi
+fi
+
 echo "All checks passed."
