@@ -14,6 +14,10 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Print all available commands categorized by type
+    #[command(name = "commands")]
+    Overview,
+
     /// Initialize gitreg and inject the shell shim
     Init,
 
@@ -67,6 +71,44 @@ pub enum Commands {
     /// Automatically discover and register repositories in common locations
     #[command(hide = true)]
     Autoscan,
+
+    /// Scan a directory tree (alias for repo scan)
+    #[command(hide = true)]
+    Scan {
+        /// Directory to scan (default: current directory)
+        dir: Option<PathBuf>,
+
+        /// Maximum directory depth to recurse (default: 3)
+        #[arg(long, short, default_value = "3")]
+        depth: usize,
+    },
+
+    /// Add a tag (alias for repo tag)
+    #[command(hide = true)]
+    Tag {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+        tag: String,
+    },
+
+    /// Remove a tag (alias for repo untag)
+    #[command(hide = true)]
+    Untag {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+        tag: String,
+    },
+
+    /// Remove a repository (alias for repo rm)
+    #[command(hide = true)]
+    Rm {
+        /// ID, repo name (owner/repo), or path
+        target: String,
+    },
+
+    /// Prune missing repositories (alias for repo prune)
+    #[command(hide = true)]
+    Prune,
 
     /// Force push uncommitted code to an emergency branch
     #[command(alias = "fire")]

@@ -14,7 +14,10 @@ use error::{GitregError, Result};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process;
-use tabled::{Table, Tabled};
+use tabled::{
+    settings::{location::ByColumnName, Disable},
+    Table, Tabled,
+};
 
 fn db_path() -> Result<PathBuf> {
     if let Ok(val) = std::env::var("GITREG_CONFIG_DIR") {
@@ -90,6 +93,54 @@ impl LsRow {
             last_seen: dt,
         }
     }
+}
+
+fn cmd_commands() {
+    println!("Usage: gitreg <COMMAND>\n");
+
+    println!("Common Commands:");
+    println!("  commands               Print all available commands categorized by type");
+    println!("  init                   Initialize gitreg and inject the shell shim");
+    println!("  ls                     List all tracked repositories");
+    println!("  git                    Run a git command across multiple repositories");
+    println!("  emergency              Force push uncommitted code to an emergency branch");
+    println!();
+
+    println!("Repository Management:");
+    println!(
+        "  repo scan              Scan a directory tree and register all found git repositories"
+    );
+    println!("  repo tag               Add a tag to a repository");
+    println!("  repo untag             Remove a tag from a repository");
+    println!("  repo rm                Remove a specific repository from the registry");
+    println!(
+        "  repo prune             Remove entries for repositories that no longer exist on disk"
+    );
+    println!();
+
+    println!("Configuration:");
+    println!("  config alias           Enable \"gr\" alias for \"gitreg\"");
+    println!("  config autoprune       Manage daily autoprune settings");
+    println!("  config exclude add     Add a path to the exclusion list");
+    println!("  config exclude rm      Remove a path from the exclusion list");
+    println!("  config exclude ls      List all excluded paths");
+    println!();
+
+    println!("Integrations:");
+    println!("  integrator register    Register an app for an event");
+    println!("  integrator unregister  Unregister an app from an event");
+    println!("  integrator ls          List all registered apps and their events");
+    println!("  integrator events      List all available events");
+    println!("  integrator block       Block an app from receiving any events");
+    println!("  integrator unblock     Unblock a previously blocked app");
+    println!("  integrator rm          Remove an app and all its event registrations");
+    println!();
+
+    println!("System:");
+    println!("  system upgrade         Check for a newer release and upgrade the binary in place");
+    println!("  system version         Show the current version");
+    println!("  system webpage         Open the github webpage");
+    println!("  system uninstall       Completely uninstall gitreg");
 }
 
 fn cmd_init() -> Result<()> {
@@ -437,7 +488,11 @@ fn cmd_ls(json: bool) -> Result<()> {
         println!("{} git dirs", records.len());
     }
     let rows: Vec<LsRow> = records.into_iter().map(LsRow::new).collect();
-    println!("{}", Table::new(rows));
+    let mut table = Table::new(rows);
+    if !has_emergency {
+        table.with(Disable::column(ByColumnName::new("Emergency Push")));
+    }
+    println!("{}", table);
     Ok(())
 }
 
@@ -1186,6 +1241,9 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::Overview => {
+            cmd_commands();
+        }
         Commands::Hook { path } => {
             if let Err(e) = cmd_hook(path) {
                 log_hook_error(&e);
@@ -1199,6 +1257,45 @@ fn main() {
         }
         Commands::Autoscan => {
             if let Err(e) = cmd_autoscan() {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Scan { dir, depth } => {
+            const MAX_SCAN_DEPTH: usize = 20;
+            if *depth > MAX_SCAN_DEPTH {
+                eprintln!("Error: --depth must be {MAX_SCAN_DEPTH} or less");
+                process::exit(1);
+            }
+            let dir = match dir {
+                Some(d) => d.clone(),
+                None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            };
+            if let Err(e) = cmd_scan(&dir, *depth) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Tag { target, tag } => {
+            if let Err(e) = cmd_tag(target, tag) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Untag { target, tag } => {
+            if let Err(e) = cmd_untag(target, tag) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Rm { target } => {
+            if let Err(e) = cmd_rm(target) {
+                eprintln!("Error: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::Prune => {
+            if let Err(e) = cmd_prune() {
                 eprintln!("Error: {e}");
                 process::exit(1);
             }

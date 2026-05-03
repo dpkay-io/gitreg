@@ -53,11 +53,10 @@ A "panic button" for your code. Force push all uncommitted changes across your t
 gitreg emergency
 ```
 
-### 6. Built for Builders (Integrators)
-`gitreg` isn't just a tool; it's a platform. You can build your own applications on top of the `gitreg` registry. Register your apps to receive events whenever repositories are visited, tagged, or updated.
-```sh
-gitreg integrator register my-app git.commit
-```
+### 6. Integrators & Automation
+`gitreg` is built as a platform for automation. You can register external applications to receive real-time notifications (via Unix Sockets or Named Pipes) whenever repositories are visited, tagged, or updated.
+
+For a complete guide on building integrations, see [INTEGRATORS.md](./INTEGRATORS.md).
 
 ### 7. Never Get Lost
 `gitreg` acts as a central hub for your entire workspace. No matter how many drives or deep directory structures you have, `gitreg` keeps everything indexed in a single, searchable place. You'll never have to hunt for that "one project" again—it's always just a `gitreg ls` away.
@@ -110,11 +109,11 @@ gitreg integrator register my-app git.commit
 
 ## 📖 Learn More
 
-For detailed installation options, architecture details, and more, see [DETAILS.md](./DETAILS.md).
+- [INTEGRATORS.md](./INTEGRATORS.md) - Full guide for building integrations and automation.
+- [DETAILS.md](./DETAILS.md) - Detailed installation options and architecture.
 
 ---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-ct is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
