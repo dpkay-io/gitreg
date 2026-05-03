@@ -1,4 +1,9 @@
-# gitreg [![Downloads](https://img.shields.io/github/downloads/dpkay-io/gitreg/total)](https://github.com/dpkay-io/gitreg/releases)
+# gitreg
+
+[![CI](https://github.com/dpkay-io/gitreg/actions/workflows/ci.yml/badge.svg)](https://github.com/dpkay-io/gitreg/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/github/downloads/dpkay-io/gitreg/total)](https://github.com/dpkay-io/gitreg/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)
 
 **High-performance, foundational infrastructure for Git repository management.**
 

@@ -21,11 +21,17 @@ pub fn dispatch(db: &Database, event: &str, data: serde_json::Value) {
         Err(_) => return,
     };
 
-    for socket_path in listeners {
-        let p_str = payload_str.clone();
-        thread::spawn(move || {
-            let _ = send_to_socket(&socket_path, &p_str);
-        });
+    let handles: Vec<_> = listeners
+        .into_iter()
+        .map(|socket_path| {
+            let p_str = payload_str.clone();
+            thread::spawn(move || {
+                let _ = send_to_socket(&socket_path, &p_str);
+            })
+        })
+        .collect();
+    for handle in handles {
+        let _ = handle.join();
     }
 }
 
