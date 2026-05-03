@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "gitreg"
-version = "0.1.15"
+version = "0.1.18"
 dependencies = [
  "chrono",
  "clap",

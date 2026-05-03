@@ -3,7 +3,11 @@ $ErrorActionPreference = 'Stop'
 
 $Repo   = 'dpkay-io/gitreg'
 $Target = 'x86_64-pc-windows-msvc'
-$Url    = "https://github.com/$Repo/releases/latest/download/gitreg-$Target.zip"
+if ($env:GITREG_VERSION) {
+    $Url = "https://github.com/$Repo/releases/download/$env:GITREG_VERSION/gitreg-$Target.zip"
+} else {
+    $Url = "https://github.com/$Repo/releases/latest/download/gitreg-$Target.zip"
+}
 
 if ($env:LOCALAPPDATA) {
     $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\gitreg'

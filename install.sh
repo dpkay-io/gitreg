@@ -39,7 +39,11 @@ case "$OS" in
     ;;
 esac
 
-URL="https://github.com/${REPO}/releases/latest/download/gitreg-${TARGET}.${EXT}"
+if [ -n "${GITREG_VERSION:-}" ]; then
+  URL="https://github.com/${REPO}/releases/download/${GITREG_VERSION}/gitreg-${TARGET}.${EXT}"
+else
+  URL="https://github.com/${REPO}/releases/latest/download/gitreg-${TARGET}.${EXT}"
+fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
