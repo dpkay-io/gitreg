@@ -58,7 +58,9 @@ jobs:
     steps:
       - name: Set up QEMU
         if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-user-static binfmt-support
 
       - name: Test in Docker
         run: |
