@@ -1,4 +1,4 @@
-﻿name: E2E Live Release
+name: E2E Live Release
 
 on:
   push:
@@ -33,22 +33,222 @@ jobs:
           $installDir = Join-Path $env:LOCALAPPDATA 'Programs\gitreg'
           echo $installDir >> $env:GITHUB_PATH
 
-      - name: Verify Version
+      - name: Verify version
         run: gitreg system version
 
-      - name: Test Functionality
+      - name: Info
         shell: bash
         run: |
-          mkdir test-repo
-          cd test-repo
-          git init -q
-          gitreg hook --path "$(pwd)"
-          gitreg ls | grep "test-repo"
-          gitreg repo tag . e2e-test
-          gitreg ls | grep "e2e-test"
-          gitreg repo rm .
+          gitreg commands
+          gitreg init || true
 
-      - name: Test Autoscan (macOS)
+      - name: Register and list
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/repo-a"
+          git -C "$RUNNER_TEMP/repo-a" init -q
+          gitreg hook --path "$RUNNER_TEMP/repo-a"
+          gitreg ls | grep "repo-a"
+          gitreg ls --json | grep "repo-a"
+          gitreg repo ls | grep "repo-a"
+          gitreg repo ls --json | grep "repo-a"
+
+      - name: Tag and untag
+        shell: bash
+        run: |
+          gitreg repo tag "$RUNNER_TEMP/repo-a" e2e-tag
+          gitreg ls | grep "e2e-tag"
+          gitreg repo untag "$RUNNER_TEMP/repo-a" e2e-tag
+          ! gitreg ls | grep "e2e-tag"
+          gitreg tag "$RUNNER_TEMP/repo-a" alias-tag
+          gitreg ls | grep "alias-tag"
+          gitreg untag "$RUNNER_TEMP/repo-a" alias-tag
+          ! gitreg ls | grep "alias-tag"
+
+      - name: Git command
+        shell: bash
+        run: gitreg git all status
+
+      - name: Live integrator - registered (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          SOCK="$RUNNER_TEMP/gitreg-e2e-reg.sock"
+          rm -f "$SOCK"
+          mkdir -p "$RUNNER_TEMP/repo-reg-live"
+          git -C "$RUNNER_TEMP/repo-reg-live" init -q
+          RPATH=$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$RUNNER_TEMP/repo-reg-live")
+          cat > "$RUNNER_TEMP/listener_reg.py" << 'PYEOF'
+          import socket, json, os, sys
+          sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+          sock.bind(os.environ['GITREG_E2E_SOCK'])
+          sock.listen(1)
+          sock.settimeout(5)
+          conn, _ = sock.accept()
+          raw = b''
+          while True:
+              c = conn.recv(4096)
+              if not c:
+                  break
+              raw += c
+          p = json.loads(raw.decode().strip())
+          assert p['event'] == 'registered', repr(p)
+          assert 'repo-reg-live' in p['data']['path'], repr(p)
+          print('OK registered')
+          PYEOF
+          export GITREG_E2E_SOCK="$SOCK"
+          python3 "$RUNNER_TEMP/listener_reg.py" &
+          LISTENER_PID=$!
+          sleep 0.3
+          gitreg integrator register --app e2e-reg --event registered --socket "$SOCK"
+          gitreg hook --path "$RPATH"
+          sleep 0.5
+          wait $LISTENER_PID
+          gitreg integrator rm --app e2e-reg
+
+      - name: Live integrator - registered (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: powershell
+        run: |
+          $pipeName = 'gitreg-e2e-reg'
+          $pipe = New-Object System.IO.Pipes.NamedPipeServerStream(
+            $pipeName,
+            [System.IO.Pipes.PipeDirection]::In,
+            1,
+            [System.IO.Pipes.PipeTransmissionMode]::Byte,
+            [System.IO.Pipes.PipeOptions]::Asynchronous
+          )
+          $ar = $pipe.BeginWaitForConnection($null, $null)
+          $repoDir = "$env:RUNNER_TEMP\repo-reg-live"
+          New-Item -ItemType Directory -Path $repoDir -Force | Out-Null
+          git -C $repoDir init -q
+          gitreg integrator register --app e2e-reg --event registered --socket "\\.\pipe\$pipeName"
+          gitreg hook --path $repoDir
+          if (-not $ar.AsyncWaitHandle.WaitOne(5000)) {
+            Write-Error "Timeout waiting for registered event"
+            exit 1
+          }
+          $pipe.EndWaitForConnection($ar)
+          $reader = New-Object System.IO.StreamReader($pipe)
+          $line = $reader.ReadLine()
+          $payload = $line | ConvertFrom-Json
+          if ($payload.event -ne 'registered') {
+            Write-Error "Expected 'registered', got '$($payload.event)'"
+            exit 1
+          }
+          Write-Host "OK: $($payload.event)"
+          $reader.Close()
+          $pipe.Close()
+          gitreg integrator rm --app e2e-reg
+
+      - name: Live integrator - tagged (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          SOCK="$RUNNER_TEMP/gitreg-e2e-tag.sock"
+          rm -f "$SOCK"
+          RPATH=$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$RUNNER_TEMP/repo-a")
+          cat > "$RUNNER_TEMP/listener_tag.py" << 'PYEOF'
+          import socket, json, os, sys
+          sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+          sock.bind(os.environ['GITREG_E2E_SOCK'])
+          sock.listen(1)
+          sock.settimeout(5)
+          conn, _ = sock.accept()
+          raw = b''
+          while True:
+              c = conn.recv(4096)
+              if not c:
+                  break
+              raw += c
+          p = json.loads(raw.decode().strip())
+          assert p['event'] == 'tagged', repr(p)
+          assert p['data']['tag'] == 'live-tag', repr(p)
+          print('OK tagged')
+          PYEOF
+          export GITREG_E2E_SOCK="$SOCK"
+          python3 "$RUNNER_TEMP/listener_tag.py" &
+          LISTENER_PID=$!
+          sleep 0.3
+          gitreg integrator register --app e2e-tagged --event tagged --socket "$SOCK"
+          gitreg repo tag "$RPATH" live-tag
+          sleep 0.5
+          wait $LISTENER_PID
+          gitreg repo untag "$RPATH" live-tag
+          gitreg integrator rm --app e2e-tagged
+
+      - name: Live integrator - tagged (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: powershell
+        run: |
+          $pipeName = 'gitreg-e2e-tag'
+          $pipe = New-Object System.IO.Pipes.NamedPipeServerStream(
+            $pipeName,
+            [System.IO.Pipes.PipeDirection]::In,
+            1,
+            [System.IO.Pipes.PipeTransmissionMode]::Byte,
+            [System.IO.Pipes.PipeOptions]::Asynchronous
+          )
+          $ar = $pipe.BeginWaitForConnection($null, $null)
+          $repoDir = "$env:RUNNER_TEMP\repo-a"
+          gitreg integrator register --app e2e-tagged --event tagged --socket "\\.\pipe\$pipeName"
+          gitreg repo tag $repoDir live-tag
+          if (-not $ar.AsyncWaitHandle.WaitOne(5000)) {
+            Write-Error "Timeout waiting for tagged event"
+            exit 1
+          }
+          $pipe.EndWaitForConnection($ar)
+          $reader = New-Object System.IO.StreamReader($pipe)
+          $line = $reader.ReadLine()
+          $payload = $line | ConvertFrom-Json
+          if ($payload.event -ne 'tagged') {
+            Write-Error "Expected 'tagged', got '$($payload.event)'"
+            exit 1
+          }
+          if ($payload.data.tag -ne 'live-tag') {
+            Write-Error "Expected tag 'live-tag', got '$($payload.data.tag)'"
+            exit 1
+          }
+          Write-Host "OK: $($payload.event)"
+          $reader.Close()
+          $pipe.Close()
+          gitreg repo untag $repoDir live-tag
+          gitreg integrator rm --app e2e-tagged
+
+      - name: Scan
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/scan-dir/nested-repo"
+          git -C "$RUNNER_TEMP/scan-dir/nested-repo" init -q
+          gitreg repo scan "$RUNNER_TEMP/scan-dir"
+          gitreg ls | grep "nested-repo"
+          gitreg scan "$RUNNER_TEMP/scan-dir"
+
+      - name: Prune
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/prune-repo-1"
+          git -C "$RUNNER_TEMP/prune-repo-1" init -q
+          gitreg hook --path "$RUNNER_TEMP/prune-repo-1"
+          rm -rf "$RUNNER_TEMP/prune-repo-1"
+          gitreg repo prune
+          ! gitreg ls | grep "prune-repo-1"
+          mkdir -p "$RUNNER_TEMP/prune-repo-2"
+          git -C "$RUNNER_TEMP/prune-repo-2" init -q
+          gitreg hook --path "$RUNNER_TEMP/prune-repo-2"
+          rm -rf "$RUNNER_TEMP/prune-repo-2"
+          gitreg prune
+          ! gitreg ls | grep "prune-repo-2"
+
+      - name: Remove
+        shell: bash
+        run: |
+          gitreg rm "$RUNNER_TEMP/scan-dir/nested-repo"
+          ! gitreg ls | grep "nested-repo"
+          gitreg repo rm "$RUNNER_TEMP/repo-a"
+          ! gitreg ls | grep "repo-a"
+
+      - name: Autoscan (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
           mkdir -p "$HOME/git/autoscan-e2e"
@@ -56,7 +256,7 @@ jobs:
           gitreg autoscan
           gitreg ls | grep "autoscan-e2e"
 
-      - name: Test Autoscan (Windows)
+      - name: Autoscan (Windows)
         if: startsWith(matrix.os, 'windows')
         shell: powershell
         run: |
@@ -65,6 +265,35 @@ jobs:
           git -C $repoDir init -q
           gitreg autoscan
           gitreg ls | Select-String "autoscan-e2e"
+
+      - name: Config
+        shell: bash
+        run: |
+          gitreg config alias
+          gitreg config autoprune --enable
+          gitreg config autoprune --disable
+          mkdir -p "$RUNNER_TEMP/excluded"
+          gitreg config exclude add "$RUNNER_TEMP/excluded"
+          gitreg config exclude ls | grep "excluded"
+          gitreg config exclude rm "$RUNNER_TEMP/excluded"
+          ! gitreg config exclude ls | grep "excluded"
+
+      - name: Integrator CLI
+        shell: bash
+        run: |
+          gitreg integrator events
+          gitreg integrator ls
+          gitreg integrator register --app cli-app --event registered --socket "$RUNNER_TEMP/cli.sock"
+          gitreg integrator ls | grep "cli-app"
+          gitreg integrator block --app cli-app
+          gitreg integrator unblock --app cli-app
+          gitreg integrator unregister --app cli-app --event registered
+          gitreg integrator rm --app cli-app
+          ! gitreg integrator ls | grep "cli-app"
+
+      - name: Uninstall
+        shell: bash
+        run: echo "UNINSTALL" | gitreg system uninstall
 
   e2e-linux-docker:
     name: Linux Docker (${{ matrix.arch }})
@@ -83,16 +312,101 @@ jobs:
       - name: Test in Docker
         run: |
           docker run --rm --platform linux/${{ matrix.arch }} ubuntu:22.04 bash -c "
-            apt-get update -qq && apt-get install -y -qq curl git bash tar ca-certificates > /dev/null
+            set -eo pipefail
+            apt-get update -qq
+            apt-get install -y -qq curl git bash tar ca-certificates socat > /dev/null
             curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
             export PATH=\"\$HOME/.local/bin:\$PATH\"
+
             gitreg system version
-            mkdir test-repo && cd test-repo && git init -q
-            gitreg hook --path \"\$(pwd)\"
-            gitreg ls | grep test-repo
-            gitreg repo tag . e2e-test
-            gitreg ls | grep e2e-test
+            gitreg commands
+            gitreg init || true
+
+            mkdir -p /tmp/repo-a && git -C /tmp/repo-a init -q
+            gitreg hook --path /tmp/repo-a
+            gitreg ls | grep repo-a
+            gitreg ls --json | grep repo-a
+            gitreg repo ls | grep repo-a
+            gitreg repo ls --json | grep repo-a
+
+            gitreg repo tag /tmp/repo-a e2e-tag
+            gitreg ls | grep e2e-tag
+            gitreg repo untag /tmp/repo-a e2e-tag
+            ! gitreg ls | grep e2e-tag
+            gitreg tag /tmp/repo-a alias-tag
+            gitreg ls | grep alias-tag
+            gitreg untag /tmp/repo-a alias-tag
+            ! gitreg ls | grep alias-tag
+
+            gitreg git all status
+
+            socat -u UNIX-LISTEN:/tmp/e2e-reg.sock STDOUT > /tmp/e2e-reg-out &
+            LRPID=\$!
+            sleep 0.3
+            gitreg integrator register --app e2e-reg --event registered --socket /tmp/e2e-reg.sock
+            mkdir -p /tmp/repo-reg-live && git -C /tmp/repo-reg-live init -q
+            gitreg hook --path /tmp/repo-reg-live
+            sleep 0.5
+            wait \$LRPID || true
+            grep -q registered /tmp/e2e-reg-out
+            grep -q repo-reg-live /tmp/e2e-reg-out
+            gitreg integrator rm --app e2e-reg
+
+            socat -u UNIX-LISTEN:/tmp/e2e-tag.sock STDOUT > /tmp/e2e-tag-out &
+            LTPID=\$!
+            sleep 0.3
+            gitreg integrator register --app e2e-tagged --event tagged --socket /tmp/e2e-tag.sock
+            gitreg repo tag /tmp/repo-a live-tag
+            sleep 0.5
+            wait \$LTPID || true
+            grep -q tagged /tmp/e2e-tag-out
+            grep -q live-tag /tmp/e2e-tag-out
+            gitreg repo untag /tmp/repo-a live-tag
+            gitreg integrator rm --app e2e-tagged
+
+            mkdir -p /tmp/scan-dir/nested-repo && git -C /tmp/scan-dir/nested-repo init -q
+            gitreg repo scan /tmp/scan-dir
+            gitreg ls | grep nested-repo
+            gitreg scan /tmp/scan-dir
+
+            mkdir -p /tmp/prune-repo-1 && git -C /tmp/prune-repo-1 init -q
+            gitreg hook --path /tmp/prune-repo-1
+            rm -rf /tmp/prune-repo-1
+            gitreg repo prune
+            ! gitreg ls | grep prune-repo-1
+            mkdir -p /tmp/prune-repo-2 && git -C /tmp/prune-repo-2 init -q
+            gitreg hook --path /tmp/prune-repo-2
+            rm -rf /tmp/prune-repo-2
+            gitreg prune
+            ! gitreg ls | grep prune-repo-2
+
+            gitreg rm /tmp/scan-dir/nested-repo
+            ! gitreg ls | grep nested-repo
+            gitreg repo rm /tmp/repo-a
+            ! gitreg ls | grep repo-a
+
             mkdir -p \"\$HOME/git/autoscan-e2e\" && git -C \"\$HOME/git/autoscan-e2e\" init -q
             gitreg autoscan
             gitreg ls | grep autoscan-e2e
+
+            gitreg config alias
+            gitreg config autoprune --enable
+            gitreg config autoprune --disable
+            mkdir -p /tmp/excluded
+            gitreg config exclude add /tmp/excluded
+            gitreg config exclude ls | grep excluded
+            gitreg config exclude rm /tmp/excluded
+            ! gitreg config exclude ls | grep excluded
+
+            gitreg integrator events
+            gitreg integrator ls
+            gitreg integrator register --app cli-app --event registered --socket /tmp/cli.sock
+            gitreg integrator ls | grep cli-app
+            gitreg integrator block --app cli-app
+            gitreg integrator unblock --app cli-app
+            gitreg integrator unregister --app cli-app --event registered
+            gitreg integrator rm --app cli-app
+            ! gitreg integrator ls | grep cli-app
+
+            echo UNINSTALL | gitreg system uninstall
           "
