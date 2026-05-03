@@ -653,13 +653,9 @@ fn check_and_run_autoprune(db: &Database) -> Result<()> {
     Ok(())
 }
 
-fn cmd_rm(target: &str) -> Result<()> {
-    let db = open_db()?;
-
-    // Resolve by ID, name, or exact path; fall back to canonicalizing as a
-    // filesystem path so relative paths (e.g. `./myrepo`) work too.
-    let id = match db.resolve_target(target)? {
-        Some(id) => id,
+fn resolve_id(db: &Database, target: &str) -> Result<i64> {
+    match db.resolve_target(target)? {
+        Some(id) => Ok(id),
         None => {
             let canon = dunce::canonicalize(target)
                 .ok()
@@ -669,9 +665,14 @@ fn cmd_rm(target: &str) -> Result<()> {
                 .map(|s| db.resolve_target(s))
                 .transpose()?
                 .flatten();
-            resolved.ok_or_else(|| GitregError::NotFound(target.to_owned()))?
+            resolved.ok_or_else(|| GitregError::NotFound(target.to_owned()))
         }
-    };
+    }
+}
+
+fn cmd_rm(target: &str) -> Result<()> {
+    let db = open_db()?;
+    let id = resolve_id(&db, target)?;
 
     let path = db
         .remove_by_id(id)?
@@ -881,9 +882,7 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
 
 fn cmd_tag(target: &str, tag: &str) -> Result<()> {
     let db = open_db()?;
-    let id = db
-        .resolve_target(target)?
-        .ok_or_else(|| GitregError::NotFound(target.to_owned()))?;
+    let id = resolve_id(&db, target)?;
     db.add_tag(id, tag)?;
     println!("added tag '{tag}'");
     event::dispatch(&db, "tagged", json!({ "target": target, "tag": tag }));
@@ -892,9 +891,7 @@ fn cmd_tag(target: &str, tag: &str) -> Result<()> {
 
 fn cmd_untag(target: &str, tag: &str) -> Result<()> {
     let db = open_db()?;
-    let id = db
-        .resolve_target(target)?
-        .ok_or_else(|| GitregError::NotFound(target.to_owned()))?;
+    let id = resolve_id(&db, target)?;
     db.remove_tag(id, tag)?;
     println!("removed tag '{tag}'");
     event::dispatch(&db, "untagged", json!({ "target": target, "tag": tag }));
