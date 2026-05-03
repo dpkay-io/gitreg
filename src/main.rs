@@ -1213,12 +1213,21 @@ fn cmd_uninstall() -> Result<()> {
         let exe_str = exe
             .to_str()
             .ok_or_else(|| GitregError::InvalidFormat("Non-UTF-8 path".to_string()))?;
-        process::Command::new("cmd")
-            .arg("/c")
-            .arg(format!(
-                "start /b cmd /c (timeout /t 1 ^& del \"{}\")",
-                exe_str
-            ))
+        // Defer self-deletion via PowerShell; single-quoted -LiteralPath avoids all
+        // cmd.exe quoting pitfalls and handles backslashes in Windows paths correctly.
+        let script = format!(
+            "Start-Sleep -Seconds 1; Remove-Item -LiteralPath '{}' -Force",
+            exe_str.replace('\'', "''")
+        );
+        process::Command::new("powershell")
+            .args([
+                "-NonInteractive",
+                "-NoProfile",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                &script,
+            ])
             .spawn()?;
         println!("Uninstallation complete.");
         process::exit(0);
