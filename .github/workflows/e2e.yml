@@ -48,6 +48,24 @@ jobs:
           gitreg ls | grep "e2e-test"
           gitreg repo rm .
 
+      - name: Test Autoscan (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          mkdir -p "$HOME/git/autoscan-e2e"
+          git -C "$HOME/git/autoscan-e2e" init -q
+          gitreg autoscan
+          gitreg ls | grep "autoscan-e2e"
+
+      - name: Test Autoscan (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: powershell
+        run: |
+          $repoDir = Join-Path $HOME "source\repos\autoscan-e2e"
+          New-Item -ItemType Directory -Path $repoDir -Force | Out-Null
+          git -C $repoDir init -q
+          gitreg autoscan
+          gitreg ls | Select-String "autoscan-e2e"
+
   e2e-linux-docker:
     name: Linux Docker (${{ matrix.arch }})
     runs-on: ubuntu-latest
@@ -74,4 +92,7 @@ jobs:
             gitreg ls | grep test-repo
             gitreg repo tag . e2e-test
             gitreg ls | grep e2e-test
+            mkdir -p \"\$HOME/git/autoscan-e2e\" && git -C \"\$HOME/git/autoscan-e2e\" init -q
+            gitreg autoscan
+            gitreg ls | grep autoscan-e2e
           "
