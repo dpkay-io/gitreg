@@ -1,0 +1,75 @@
+name: E2E Live Release
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight
+  workflow_dispatch: # Allow manual triggering
+  pull_request:
+    paths:
+      - '.github/workflows/e2e.yml'
+
+jobs:
+  e2e-native:
+    name: Native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-14, windows-2022]
+    steps:
+      - name: Install (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: powershell
+        run: |
+          irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
+          $installDir = Join-Path $HOME ".local\bin"
+          echo $installDir >> $env:GITHUB_PATH
+
+      - name: Verify Version
+        run: gitreg system version
+
+      - name: Test Functionality
+        shell: bash
+        run: |
+          mkdir test-repo
+          cd test-repo
+          git init -q
+          gitreg hook --path "$(pwd)"
+          gitreg ls | grep "test-repo"
+          gitreg repo tag . e2e-test
+          gitreg ls | grep "e2e-test"
+          gitreg repo rm .
+
+  e2e-linux-docker:
+    name: Linux Docker (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Set up QEMU
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Test in Docker
+        run: |
+          docker run --rm --platform linux/${{ matrix.arch }} ubuntu:22.04 bash -c "
+            apt-get update -qq && apt-get install -y -qq curl git bash tar ca-certificates > /dev/null
+            curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | bash
+            export PATH=\"\$HOME/.local/bin:\$PATH\"
+            gitreg system version
+            mkdir test-repo && cd test-repo && git init -q
+            gitreg hook --path \"\$(pwd)\"
+            gitreg ls | grep test-repo
+            gitreg repo tag . e2e-test
+            gitreg ls | grep e2e-test
+          "
