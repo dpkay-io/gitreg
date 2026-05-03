@@ -36,7 +36,7 @@ pub fn run(raw_path: &Path, db: &Database) -> Result<bool> {
     Ok(registered)
 }
 
-fn extract_repo_name(git_dir: &Path) -> Option<String> {
+pub fn extract_repo_name(git_dir: &Path) -> Option<String> {
     let content = std::fs::read_to_string(git_dir.join("config")).ok()?;
     let mut in_origin = false;
     for line in content.lines() {

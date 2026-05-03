@@ -755,7 +755,8 @@ fn cmd_autoscan() -> Result<()> {
 
         // Check if target itself is a repo
         if canonical.join(".git").is_dir() {
-            if !db.is_excluded(canonical_str)? && db.upsert(canonical_str, None)? {
+            let repo_name = hook::extract_repo_name(&canonical.join(".git"));
+            if !db.is_excluded(canonical_str)? && db.upsert(canonical_str, repo_name.as_deref())? {
                 println!("  {}", canonical_str);
                 event::dispatch(&db, "registered", json!({ "path": canonical_str }));
                 found += 1;
@@ -780,7 +781,8 @@ fn cmd_autoscan() -> Result<()> {
             if let Ok(ft) = entry.file_type() {
                 if ft.is_dir() && path.join(".git").is_dir() {
                     if let Some(s) = path.to_str() {
-                        if !db.is_excluded(s)? && db.upsert(s, None)? {
+                        let repo_name = hook::extract_repo_name(&path.join(".git"));
+                        if !db.is_excluded(s)? && db.upsert(s, repo_name.as_deref())? {
                             println!("  {}", s);
                             event::dispatch(&db, "registered", json!({ "path": s }));
                             found += 1;
@@ -826,7 +828,8 @@ fn cmd_scan(dir: &Path, max_depth: usize) -> Result<()> {
         }
 
         if current.join(".git").is_dir() {
-            match db.upsert(current_str, None) {
+            let repo_name = hook::extract_repo_name(&current.join(".git"));
+            match db.upsert(current_str, repo_name.as_deref()) {
                 Ok(true) => {
                     println!("  {}", current_str);
                     event::dispatch(&db, "registered", json!({ "path": current_str }));
