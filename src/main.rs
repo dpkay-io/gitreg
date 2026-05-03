@@ -1053,12 +1053,15 @@ fn cmd_exclude(action: &ExcludeAction) -> Result<()> {
             }
         }
         ExcludeAction::Rm { path } => {
-            let canon =
-                dunce::canonicalize(path).map_err(|_| GitregError::PathNotFound(path.clone()))?;
-            let s = canon.to_str().ok_or_else(|| {
+            let s = match dunce::canonicalize(path) {
+                Ok(canon) => canon.to_str().map(|s| s.to_string()),
+                Err(_) => path.to_str().map(|s| s.to_string()),
+            }
+            .ok_or_else(|| {
                 GitregError::InvalidFormat("Non-UTF-8 path not supported".to_string())
             })?;
-            if db.remove_exclusion(s)? {
+
+            if db.remove_exclusion(&s)? {
                 println!("Removed exclusion: {s}");
             } else {
                 println!("Exclusion not found: {s}");

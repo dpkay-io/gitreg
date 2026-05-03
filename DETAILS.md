@@ -41,7 +41,7 @@ gitreg init
 
 ### Windows Manual Install
 
-**Native PowerShell** (recommended):
+**Native PowerShell** (recommended, automatically runs `init`):
 ```powershell
 irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
 ```

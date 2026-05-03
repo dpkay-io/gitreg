@@ -12,15 +12,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-2022]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd        # v6.0.2
+      - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8   # stable 2026-05-01
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32       # v2
+      - uses: Swatinem/rust-cache@v2
 
       - name: fmt
         run: cargo fmt -- --check
@@ -35,8 +35,11 @@ jobs:
         run: cargo build --locked
 
       - name: audit
+        shell: bash
         run: |
-          cargo install cargo-audit --version 0.22.1 --locked
+          if ! command -v cargo-audit &> /dev/null; then
+            cargo install cargo-audit --version 0.22.1 --locked
+          fi
           cargo audit
 
       - name: integration tests

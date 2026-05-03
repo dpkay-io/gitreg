@@ -1,8 +1,10 @@
-# gitreg
+# gitreg [![Downloads](https://img.shields.io/github/downloads/dpkay-io/gitreg/total)](https://github.com/dpkay-io/gitreg/releases)
 
 **High-performance, foundational infrastructure for Git repository management.**
 
 `gitreg` is a zero-latency repository registry that serves as a lightweight backbone for your local development environment. It automatically tracks every Git repository you visit, providing a centralized, queryable index that enables developers to build sophisticated automation and custom workflows around their workspace.
+
+![gitreg ls output](gitreg-ls.png)
 
 ---
 
@@ -20,7 +22,7 @@ curl -sSf https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.sh | ba
 irm https://raw.githubusercontent.com/dpkay-io/gitreg/main/install.ps1 | iex
 ```
 
-*After installation, run `gitreg init` to set up your shell.*
+*The installation scripts automatically run `gitreg init`. Simply restart your terminal to activate the shell shim (manual installations require running `gitreg init` once).*
 
 ---
 

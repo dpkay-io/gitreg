@@ -14,7 +14,7 @@ jobs:
       new_tag: ${{ steps.tag.outputs.new_tag }}
       skip: ${{ steps.tag.outputs.skip }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd        # v6.0.2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -57,17 +57,17 @@ jobs:
             os: macos-latest
             archive: tar.gz
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2022
             archive: zip
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd        # v6.0.2
+      - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8   # stable 2026-05-01
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32       # v2
+      - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
 
@@ -133,7 +133,7 @@ jobs:
           path: dist/
 
       - name: Publish release
-        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5  # v1.14.0
+        uses: ncipollo/release-action@v1
         with:
           tag: ${{ needs.tag.outputs.new_tag }}
           name: ${{ needs.tag.outputs.new_tag }}
