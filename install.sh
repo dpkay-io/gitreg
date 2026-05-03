@@ -39,7 +39,7 @@ case "$OS" in
     ;;
 esac
 
-URL="https://github.com/${REPO}/releases/download/latest/gitreg-${TARGET}.${EXT}"
+URL="https://github.com/${REPO}/releases/latest/download/gitreg-${TARGET}.${EXT}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
